@@ -15,7 +15,11 @@
       "Bash(solc --version)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('abi',[]\\), indent=2\\)\\)\")",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); abi=d.get\\('abi',[]\\); [print\\(f['name']\\) for f in abi if f['type']=='function']\")",
-      "Bash(tee /tmp/forge-error.txt)"
+      "Bash(tee /tmp/forge-error.txt)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('name','?'\\), d.get\\('version','?'\\)\\)\")",
+      "Bash(tee /tmp/forge-build.txt)",
+      "Bash(tee /tmp/forge-full.txt)",
+      "Bash(python3 -m json.tool)"
     ]
   }
 }
