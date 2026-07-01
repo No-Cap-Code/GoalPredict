@@ -41,20 +41,97 @@ export default function BracketVisual({
   }
 
   return (
-    <div className="w-full overflow-x-auto py-4">
-      <div className="flex gap-6 min-w-max px-2">
-        {rounds.map((round, ri) => (
-          <RoundColumn
-            key={round.label}
-            round={round}
-            roundIndex={ri}
-            totalRounds={rounds.length}
-            onPick={onPick}
-            locked={locked}
-          />
+    <>
+      {/* Desktop: horizontal bracket with scroll */}
+      <div className="hidden sm:block w-full overflow-x-auto py-4">
+        <div className="flex gap-6 min-w-max px-2">
+          {rounds.map((round, ri) => (
+            <RoundColumn
+              key={round.label}
+              round={round}
+              roundIndex={ri}
+              totalRounds={rounds.length}
+              onPick={onPick}
+              locked={locked}
+              horizontal
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Mobile: vertically stacked rounds */}
+      <div className="sm:hidden w-full py-4 space-y-6">
+        {rounds.map((round) => (
+          <div key={round.label}>
+            <div className="text-center mb-3">
+              <span className="text-xs font-bold uppercase tracking-widest text-emerald-400 bg-emerald-900/30 px-3 py-1 rounded-full">
+                {round.label}
+              </span>
+            </div>
+            <div className="flex flex-col gap-3">
+              {round.matches.map((match) => {
+                const userPicked = match.picks?.pickedWinner;
+                return (
+                  <div
+                    key={match.id}
+                    className={`
+                      rounded-lg border-2 p-3 w-full transition-colors
+                      ${
+                        match.resolved
+                          ? "border-emerald-700/60 bg-slate-800/40"
+                          : "border-slate-600 bg-slate-800/60"
+                      }
+                    `}
+                  >
+                    {/* Home team */}
+                    <div className="flex items-center justify-between">
+                      <TeamBadge
+                        team={match.homeTeam}
+                        size="sm"
+                        selected={
+                          userPicked === match.homeTeam ||
+                          match.winner === match.homeTeam
+                        }
+                        onClick={() => {
+                          if (!locked && onPick) onPick(match.id, match.homeTeam);
+                        }}
+                        disabled={locked || match.resolved}
+                      />
+                      {match.resolved && match.winner === match.homeTeam && (
+                        <CheckMark />
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-center my-1">
+                      <span className="text-xs text-slate-500 font-bold">VS</span>
+                    </div>
+
+                    {/* Away team */}
+                    <div className="flex items-center justify-between">
+                      <TeamBadge
+                        team={match.awayTeam}
+                        size="sm"
+                        selected={
+                          userPicked === match.awayTeam ||
+                          match.winner === match.awayTeam
+                        }
+                        onClick={() => {
+                          if (!locked && onPick) onPick(match.id, match.awayTeam);
+                        }}
+                        disabled={locked || match.resolved}
+                      />
+                      {match.resolved && match.winner === match.awayTeam && (
+                        <CheckMark />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -65,15 +142,18 @@ function RoundColumn({
   totalRounds,
   onPick,
   locked,
+  horizontal = false,
 }: {
   round: RoundData;
   roundIndex: number;
   totalRounds: number;
   onPick?: (matchId: number, team: string) => void;
   locked: boolean;
+  horizontal?: boolean;
 }) {
-  // totalRounds reserved for future bracket line styling
+  // totalRounds and horizontal reserved for future bracket line styling
   void totalRounds;
+  void horizontal;
 
   // Calculate spacing so that match boxes are vertically distributed
   // across the full bracket height

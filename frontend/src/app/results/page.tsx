@@ -178,18 +178,18 @@ export default function ResultsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Tournament Results</h1>
-        <p className="text-slate-400 mt-1">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white">Tournament Results</h1>
+        <p className="text-slate-400 mt-1 text-sm sm:text-base">
           Resolved rounds, your scorecard, and leaderboard standings.
         </p>
       </div>
 
       {/* Resolved Rounds */}
       <section className="mb-10">
-        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+        <h2 className="text-xl sm:text-2xl font-bold text-white mb-6 flex items-center gap-2">
           <span className="text-emerald-400">✓</span>
           Resolved Rounds
         </h2>
@@ -210,11 +210,11 @@ export default function ResultsPage() {
                 {round.matches.map((m) => (
                   <div
                     key={m.id}
-                    className="flex items-center justify-between px-4 py-3"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 gap-2"
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-xl">{m.correct ? "✅" : "❌"}</span>
-                      <div className="text-sm">
+                      <div className="text-xs sm:text-sm">
                         <span className="font-medium text-slate-200">
                           {m.homeTeam}
                         </span>
@@ -224,8 +224,8 @@ export default function ResultsPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-emerald-400">
+                    <div className="text-right sm:text-right pl-8 sm:pl-0">
+                      <div className="text-xs sm:text-sm font-bold text-emerald-400">
                         Winner: {m.winner}
                       </div>
                       <div className="text-xs text-slate-500">
@@ -242,21 +242,21 @@ export default function ResultsPage() {
 
       {/* User Scorecard */}
       <section className="mb-10">
-        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+        <h2 className="text-xl sm:text-2xl font-bold text-white mb-6 flex items-center gap-2">
           <span className="text-amber-400">📊</span>
           Your Scorecard
         </h2>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
           {/* Total */}
-          <div className="rounded-xl border-2 border-emerald-700/50 bg-emerald-900/30 p-6 text-center col-span-1 sm:col-span-2">
-            <div className="text-xs font-bold uppercase tracking-widest text-emerald-400">
+          <div className="rounded-xl border-2 border-emerald-700/50 bg-emerald-900/30 p-4 sm:p-6 text-center col-span-2 sm:col-span-2">
+            <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-emerald-400">
               Total Correct
             </div>
-            <div className="mt-2 text-5xl font-extrabold text-emerald-300">
+            <div className="mt-2 text-3xl sm:text-5xl font-extrabold text-emerald-300">
               {userCorrect}/15
             </div>
-            <div className="mt-2 text-sm text-slate-400">
+            <div className="mt-2 text-xs sm:text-sm text-slate-400">
               {Math.round((userCorrect / 15) * 100)}% accuracy
             </div>
           </div>
@@ -265,13 +265,13 @@ export default function ResultsPage() {
           {userByRound.map((correct, idx) => (
             <div
               key={idx}
-              className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 text-center"
+              className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 sm:p-4 text-center"
             >
-              <div className="text-xs font-bold uppercase tracking-widest text-slate-400">
+              <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-400">
                 {ROUND_LABELS[idx]}
               </div>
-              <div className="mt-1 text-2xl font-bold text-white">{correct}</div>
-              <div className="text-xs text-slate-500">
+              <div className="mt-1 text-xl sm:text-2xl font-bold text-white">{correct}</div>
+              <div className="text-[10px] sm:text-xs text-slate-500">
                 /{rounds[idx].matches.length}
               </div>
             </div>
@@ -281,15 +281,15 @@ export default function ResultsPage() {
 
       {/* Claim Winnings */}
       <section className="mb-10">
-        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+        <h2 className="text-xl sm:text-2xl font-bold text-white mb-6 flex items-center gap-2">
           <span className="text-amber-400">💰</span>
           Claim Winnings
         </h2>
 
-        <div className="rounded-xl border border-amber-700/40 bg-amber-900/20 p-6">
+        <div className="rounded-xl border border-amber-700/40 bg-amber-900/20 p-4 sm:p-6">
           {canClaim ? (
             <>
-              <p className="text-slate-300 mb-4">
+              <p className="text-slate-300 mb-4 text-sm sm:text-base">
                 You have <span className="font-bold text-amber-300">
                   {userCorrect} correct picks
                 </span>{" "}
@@ -316,12 +316,13 @@ export default function ResultsPage() {
 
       {/* Leaderboard */}
       <section>
-        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+        <h2 className="text-xl sm:text-2xl font-bold text-white mb-6 flex items-center gap-2">
           <span className="text-emerald-400">🏅</span>
           Leaderboard
         </h2>
 
-        <div className="rounded-xl border border-slate-700 bg-slate-900/50 overflow-hidden">
+        {/* Desktop table */}
+        <div className="hidden sm:block rounded-xl border border-slate-700 bg-slate-900/50 overflow-hidden">
           <table className="w-full">
             <thead>
               <tr className="bg-slate-800/50 border-b border-slate-700">
@@ -373,6 +374,46 @@ export default function ResultsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card layout */}
+        <div className="sm:hidden space-y-3">
+          {LEADERBOARD.map((entry) => (
+            <div
+              key={entry.address}
+              className="rounded-xl border border-slate-700 bg-slate-900/50 p-4 flex items-center gap-4"
+            >
+              <span
+                className={`
+                  inline-flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold flex-shrink-0
+                  ${
+                    entry.rank === 1
+                      ? "bg-amber-500 text-slate-900"
+                      : entry.rank === 2
+                      ? "bg-slate-400 text-slate-900"
+                      : entry.rank === 3
+                      ? "bg-amber-700 text-slate-900"
+                      : "bg-slate-700 text-slate-200"
+                  }
+                `}
+              >
+                {entry.rank}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="font-mono text-sm text-slate-300 truncate">
+                  {entry.address}
+                </div>
+                <div className="flex items-center gap-4 mt-1">
+                  <span className="text-xs font-bold text-emerald-400">
+                    {entry.correct}/15 correct
+                  </span>
+                  <span className="text-xs font-bold text-amber-300">
+                    {entry.earned.toLocaleString()} USDT
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
     </div>

@@ -19,7 +19,8 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('name','?'\\), d.get\\('version','?'\\)\\)\")",
       "Bash(tee /tmp/forge-build.txt)",
       "Bash(tee /tmp/forge-full.txt)",
-      "Bash(python3 -m json.tool)"
+      "Bash(python3 -m json.tool)",
+      "Bash(cast wallet *)"
     ]
   }
 }

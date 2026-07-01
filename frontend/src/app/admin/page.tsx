@@ -93,11 +93,11 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       {/* Page header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Admin Panel</h1>
-        <p className="text-slate-400 mt-1">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white">Admin Panel</h1>
+        <p className="text-slate-400 mt-1 text-sm sm:text-base">
           Manage tournaments, matches, and round resolutions.
         </p>
         <p className="text-xs text-emerald-400 mt-2">
@@ -105,9 +105,9 @@ export default function AdminPage() {
         </p>
       </div>
 
-      {/* Tab navigation */}
-      <div className="mb-8 border-b border-slate-700">
-        <nav className="flex gap-6">
+      {/* Tab navigation - horizontally scrollable on mobile */}
+      <div className="mb-8 border-b border-slate-700 overflow-x-auto">
+        <nav className="flex gap-6 min-w-max">
           {[
             { id: "create", label: "Create Tournament" },
             { id: "add", label: "Add Match" },
@@ -116,7 +116,7 @@ export default function AdminPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? "border-emerald-500 text-emerald-400"
                   : "border-transparent text-slate-400 hover:text-slate-200"
@@ -196,7 +196,7 @@ export default function AdminPage() {
 
         {activeTab === "add" && (
           <form onSubmit={handleAddMatch} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
                   Round
