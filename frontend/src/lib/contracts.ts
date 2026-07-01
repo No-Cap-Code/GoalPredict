@@ -3,12 +3,12 @@
 // Generated from compiled Solidity contracts
 // ============================================================
 
-// ---------- Addresses (placeholder — replace after deploy) ----------
+// ---------- Addresses — deployed to Base Sepolia ----------
 
 export const ADDRESSES = {
-  GoalPredictCore: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0" as const,
-  BracketNFT: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as const,
-  MockUSDT: "0x5FbDB2315678afecb367f032d93F642f64180aa3" as const,
+  GoalPredictCore: "0x3302C54d453EcA852b51B01fb350A5B795345Ff4" as const,
+  BracketNFT: "0x5caA44D84a625a14B2838563972132857378665F" as const,
+  MockUSDT: "0xA6Fe3df16800A48c3d9E53FC1C58C3f9e2c994a1" as const,
 } as const;
 
 // ---------- GoalPredictCore ABI ----------
