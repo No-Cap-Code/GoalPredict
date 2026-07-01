@@ -132,9 +132,9 @@ export default function LiveMatchFeed({
               />
             </div>
             <div className="flex justify-between mt-1">
-              <span className="text-[10px] text-slate-500">0'</span>
-              <span className="text-[10px] text-slate-500">45'</span>
-              <span className="text-[10px] text-slate-500">90'</span>
+              <span className="text-[10px] text-slate-500">0&apos;</span>
+              <span className="text-[10px] text-slate-500">45&apos;</span>
+              <span className="text-[10px] text-slate-500">90&apos;</span>
             </div>
           </div>
         )}

@@ -1,6 +1,7 @@
 // ============================================================
-// GoalPredict — Play page
-// Bracket visual, AI predictions, submit picks, stepper, toasts
+// GoalPredict — Play page (World Cup 2026 edition)
+// Bracket visual, live match feed, AI predictions, submit picks,
+// stepper, toasts, animations
 // ============================================================
 
 "use client";
@@ -10,23 +11,75 @@ import { useAccount } from "wagmi";
 import { ConnectKitButton } from "connectkit";
 import BracketVisual, { type BracketMatch } from "@/components/BracketVisual";
 import AIPrediction from "@/components/AIPrediction";
+import LiveMatchFeed from "@/components/LiveMatchFeed";
 import { useEnterTournament, useSubmitBracket } from "@/hooks/useGoalPredict";
 import {
   predictMatch,
   loadPredictionModel,
   type QVACPrediction,
 } from "@/lib/qvac";
+import { TEAMS, FLAG_MAP } from "@/lib/worldcup2026";
+import {
+  generateFullMatchCommentary,
+  type CommentaryEvent,
+} from "@/lib/ai-commentary";
 
-// ---------- demo bracket data ----------
-const DEMO_TEAMS: { home: string; away: string }[] = [
-  { home: "Brazil", away: "South Korea" },
-  { home: "Japan", away: "Croatia" },
-  { home: "Morocco", away: "Spain" },
-  { home: "Argentina", away: "Australia" },
-  { home: "France", away: "Poland" },
-  { home: "England", away: "Senegal" },
-  { home: "Portugal", away: "Switzerland" },
-  { home: "Netherlands", away: "USA" },
+// ---------- World Cup 2026 Knockout Bracket (R16) ----------
+// 16 matches seeded from the 12 groups — exciting cross-group matchups
+const WC2026_R16: { home: string; away: string }[] = [
+  { home: "Brazil",       away: "South Korea" },
+  { home: "Argentina",    away: "Croatia" },
+  { home: "France",       away: "Senegal" },
+  { home: "England",      away: "Colombia" },
+  { home: "Spain",        away: "Morocco" },
+  { home: "Germany",      away: "Japan" },
+  { home: "Portugal",     away: "Uruguay" },
+  { home: "Netherlands",  away: "USA" },
+  { home: "Belgium",      away: "Ecuador" },
+  { home: "Mexico",       away: "Switzerland" },
+  { home: "Iran",         away: "Australia" },
+  { home: "Croatia",      away: "Canada" },
+];
+
+// ---------- Demo live match data ----------
+interface LiveMatchData {
+  homeTeam: { name: string; code: string; flag: string; score: number };
+  awayTeam: { name: string; code: string; flag: string; score: number };
+  status: "upcoming" | "live" | "finished";
+  currentMinute: number;
+  predictions: { homeWinPct: number; drawPct: number; awayWinPct: number };
+}
+
+function getTeamCode(name: string): string {
+  return TEAMS.find((t) => t.name === name)?.code ?? name.slice(0, 3).toUpperCase();
+}
+
+function getTeamFlag(name: string): string {
+  return FLAG_MAP[name] ?? "\u{1F3C6}";
+}
+
+const DEMO_LIVE_MATCHES: LiveMatchData[] = [
+  {
+    homeTeam: { name: "Brazil", code: getTeamCode("Brazil"), flag: getTeamFlag("Brazil"), score: 2 },
+    awayTeam: { name: "South Korea", code: getTeamCode("South Korea"), flag: getTeamFlag("South Korea"), score: 1 },
+    status: "live",
+    currentMinute: 67,
+    predictions: { homeWinPct: 62, drawPct: 20, awayWinPct: 18 },
+  },
+  {
+    homeTeam: { name: "Argentina", code: getTeamCode("Argentina"), flag: getTeamFlag("Argentina"), score: 1 },
+    awayTeam: { name: "Croatia", code: getTeamCode("Croatia"), flag: getTeamFlag("Croatia"), score: 1 },
+    status: "live",
+    currentMinute: 34,
+    predictions: { homeWinPct: 55, drawPct: 25, awayWinPct: 20 },
+  },
+  {
+    homeTeam: { name: "Spain", code: getTeamCode("Spain"), flag: getTeamFlag("Spain"), score: 3 },
+    awayTeam: { name: "Morocco", code: getTeamCode("Morocco"), flag: getTeamFlag("Morocco"), score: 0 },
+    status: "finished",
+    currentMinute: 90,
+    predictions: { homeWinPct: 58, drawPct: 22, awayWinPct: 20 },
+  },
 ];
 
 // ---------- Toast types ----------
@@ -133,7 +186,7 @@ function ToastContainer({
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`flex items-center gap-3 rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-sm transition-all duration-300 ${
+          className={`flex items-center gap-3 rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-sm transition-all duration-300 animate-slide-in ${
             toast.type === "pending"
               ? "border-amber-700/60 bg-amber-950/90 text-amber-200"
               : toast.type === "success"
@@ -241,6 +294,34 @@ export default function PlayPage() {
   const [hasEntered, setHasEntered] = useState(false);
   const [picksLocked, setPicksLocked] = useState(false);
 
+  // Live match commentary state
+  // Generate all commentary once on mount, store per match
+  const allLiveCommentary = useMemo(() => {
+    return DEMO_LIVE_MATCHES.map((match) =>
+      generateFullMatchCommentary(match.homeTeam.name, match.awayTeam.name),
+    );
+  }, []);
+
+  const [liveMinutes, setLiveMinutes] = useState<Record<number, number>>({});
+
+  // Filter commentary by current minute for each live match
+  const liveCommentary = useMemo(() => {
+    const result: Record<number, CommentaryEvent[]> = {};
+    DEMO_LIVE_MATCHES.forEach((match, idx) => {
+      const minute = liveMinutes[idx] ?? match.currentMinute;
+      result[idx] = allLiveCommentary[idx].filter(
+        (e) => e.minute <= minute,
+      );
+    });
+    return result;
+  }, [liveMinutes, allLiveCommentary]);
+
+  // Fade-in animation on mount
+  const [pageVisible, setPageVisible] = useState(false);
+  useEffect(() => {
+    requestAnimationFrame(() => setPageVisible(true));
+  }, []);
+
   // Toast helpers
   const addToast = useCallback(
     (type: ToastType, message: string) => {
@@ -304,6 +385,23 @@ export default function PlayPage() {
     }
   }, [submitError, addToast]);
 
+  // Simulate live match commentary advancing
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLiveMinutes((prev) => {
+        const next = { ...prev };
+        DEMO_LIVE_MATCHES.forEach((match, idx) => {
+          if (match.status !== "live") return;
+          const current = prev[idx] ?? match.currentMinute;
+          if (current >= 90) return;
+          next[idx] = current + 1;
+        });
+        return next;
+      });
+    }, 5000); // Advance every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
+
   // totalPicks derived early for stepper and submit logic
   const totalPicks = Object.keys(picks).length;
 
@@ -315,10 +413,11 @@ export default function PlayPage() {
     return 0;
   }, [hasEntered, picksLocked, totalPicks]);
 
-  // Build bracket rounds from demo data
+  // Build bracket rounds from World Cup 2026 data
   const rounds = useMemo(() => {
-    // Round 1: 8 matches
-    const r1: BracketMatch[] = DEMO_TEAMS.map((m, i) => ({
+    // R16: 8 matches from our WC2026 bracket (first 8)
+    const r16Teams = WC2026_R16.slice(0, 8);
+    const r1: BracketMatch[] = r16Teams.map((m, i) => ({
       id: i,
       homeTeam: m.home,
       awayTeam: m.away,
@@ -327,14 +426,14 @@ export default function PlayPage() {
       picks: picks[i] ? { pickedWinner: picks[i] } : null,
     }));
 
-    // QF: 4 matches — winners from r1
+    // QF: 4 matches — winners from r16
     const r2: BracketMatch[] = [0, 1, 2, 3, 4, 5, 6, 7]
       .filter((_, i) => i % 2 === 0)
       .map((idx, i) => {
         const w = picks[idx];
         return {
           id: 8 + i,
-          homeTeam: w || `Winner R1-${Math.floor(idx / 2) + 1}`,
+          homeTeam: w || `Winner R16-${Math.floor(idx / 2) + 1}`,
           awayTeam: "TBD",
           winner: null,
           resolved: false,
@@ -376,7 +475,7 @@ export default function PlayPage() {
   useEffect(() => {
     if (!modelReady) return;
 
-    DEMO_TEAMS.forEach((m, i) => {
+    WC2026_R16.forEach((m, i) => {
       if (!predictions[i]) {
         predictMatch(m.home, m.away).then((pred) => {
           setPredictions((prev) => ({ ...prev, [i]: pred }));
@@ -392,9 +491,10 @@ export default function PlayPage() {
 
   // Submit picks on-chain for Round 0 (R16)
   const handleSubmit = useCallback(() => {
+    const r16Teams = WC2026_R16.slice(0, 8);
     // Convert picks to match indices for the contract
     // 0 = home wins, 1 = away wins
-    const pickIndices = DEMO_TEAMS.map((m, i) => {
+    const pickIndices = r16Teams.map((m, i) => {
       const p = picks[i];
       if (!p) return 0;
       return p === m.home ? 0 : 1;
@@ -406,11 +506,11 @@ export default function PlayPage() {
   if (!isConnected) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
-        <span className="text-7xl mb-6">⚽</span>
+        <span className="text-7xl mb-6 animate-bounce">⚽</span>
         <h1 className="text-3xl font-bold mb-4">Connect Your Wallet</h1>
         <p className="text-slate-400 mb-8 max-w-md">
-          Link your wallet to enter the tournament and start making bracket
-          predictions.
+          Link your wallet to enter the World Cup 2026 tournament and start
+          making bracket predictions.
         </p>
         <ConnectKitButton />
       </div>
@@ -418,7 +518,11 @@ export default function PlayPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 pb-24 sm:pb-8">
+    <div
+      className={`max-w-7xl mx-auto px-4 sm:px-6 py-8 pb-24 sm:pb-8 transition-opacity duration-700 ${
+        pageVisible ? "opacity-100" : "opacity-0"
+      }`}
+    >
       {/* Progress Stepper - horizontally scrollable on mobile */}
       <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
         <ProgressStepper currentStep={currentStep} />
@@ -427,20 +531,22 @@ export default function PlayPage() {
       {/* Page header */}
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Your Bracket</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">
+            World Cup 2026 Bracket
+          </h1>
           <p className="text-slate-400 mt-1 text-sm sm:text-base">
-            Pick winners for each match. Use QVAC AI predictions to guide your
-            choices, or trust your gut!
+            Pick winners for each knockout match. Use QVAC AI predictions to
+            guide your choices, or trust your gut!
           </p>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-slate-500">
-            {totalPicks}/{DEMO_TEAMS.length + 4} picks
+            {totalPicks}/{WC2026_R16.length + 6} picks
           </span>
           <button
             onClick={handleSubmit}
             disabled={submitPending || totalPicks === 0}
-            className="rounded-xl bg-emerald-500 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-xl bg-emerald-500 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-400 hover:shadow-emerald-400/30 hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
             {submitPending ? "Submitting..." : "Lock Picks"}
           </button>
@@ -468,19 +574,93 @@ export default function PlayPage() {
             enter(0); // contract reads entryFee internally
           }}
           disabled={enterPending || hasEntered}
-          className="sm:ml-auto rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-amber-500 disabled:opacity-40 min-h-12"
+          className="sm:ml-auto rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-amber-500 hover:scale-105 active:scale-95 disabled:opacity-40 min-h-12 disabled:hover:scale-100"
         >
           {enterPending ? "Depositing..." : hasEntered ? "Entered" : "Enter ($10 USDT)"}
         </button>
       </div>
 
+      {/* ---------- Live Match Feed ---------- */}
+      <div className="mb-10">
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-white inline-flex items-center gap-2">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
+            </span>
+            Live Match Feed
+          </h2>
+          <HelpTooltip text="Watch AI-generated live commentary from ongoing World Cup 2026 matches." />
+        </div>
+        <p className="text-slate-400 mb-4 text-sm">
+          Real-time match updates powered by QVAC AI commentary.
+        </p>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {DEMO_LIVE_MATCHES.map((match, idx) => {
+            const isLive = match.status === "live";
+            return (
+              <div
+                key={idx}
+                className={`animate-fade-in-up ${
+                  idx === 0
+                    ? "animation-delay-0"
+                    : idx === 1
+                    ? "animation-delay-100"
+                    : "animation-delay-200"
+                }`}
+              >
+                {/* Live badge */}
+                {isLive && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
+                    </span>
+                    <span className="text-xs font-bold text-rose-400 uppercase tracking-wider">
+                      Live — {formatMatchMinute(liveMinutes[idx] ?? match.currentMinute)}
+                    </span>
+                  </div>
+                )}
+                {match.status === "finished" && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Full Time
+                    </span>
+                  </div>
+                )}
+                <LiveMatchFeed
+                  homeTeam={match.homeTeam}
+                  awayTeam={match.awayTeam}
+                  status={match.status}
+                  currentMinute={liveMinutes[idx] ?? match.currentMinute}
+                  events={liveCommentary[idx] ?? []}
+                  predictions={match.predictions}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Bracket - collapsible on very small screens */}
-      <details className="mb-6 sm:mb-0 sm:contents">
-        <summary className="sm:hidden cursor-pointer text-sm font-semibold text-emerald-400 mb-3 select-none">
-          View Bracket
-        </summary>
-        <BracketVisual rounds={rounds} onPick={handlePick} />
-      </details>
+      <div className="mb-10">
+        <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">
+          Knockout Bracket
+        </h2>
+        <p className="text-slate-400 mb-4 text-sm">
+          Select your winners for each round. All 48 World Cup 2026 qualified
+          teams across 12 groups compete in the knockout stage.
+        </p>
+        <details className="mb-6 sm:mb-0 sm:contents">
+          <summary className="sm:hidden cursor-pointer text-sm font-semibold text-emerald-400 mb-3 select-none">
+            View Bracket
+          </summary>
+          <div className="animate-fade-in-up animation-delay-300">
+            <BracketVisual rounds={rounds} onPick={handlePick} />
+          </div>
+        </details>
+      </div>
 
       {/* AI Predictions panel with tooltip */}
       <div className="mt-10">
@@ -489,13 +669,17 @@ export default function PlayPage() {
           <HelpTooltip text="Powered by QVAC, runs locally on your device. No cloud APIs." />
         </h2>
         <p className="text-slate-400 mb-6 text-sm">
-          AI-generated win probabilities for each first-round matchup.
+          AI-generated win probabilities for each World Cup 2026 knockout matchup.
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {DEMO_TEAMS.map((m, i) => {
+          {WC2026_R16.map((m, i) => {
             const pred: QVACPrediction | undefined = predictions[i];
             return (
-              <div key={i} className="rounded-xl border border-slate-700 bg-slate-900/50 p-3">
+              <div
+                key={i}
+                className="rounded-xl border border-slate-700 bg-slate-900/50 p-3 transition-all duration-300 hover:border-slate-500 hover:bg-slate-800/50 hover:shadow-lg hover:shadow-slate-900/50 animate-fade-in-up"
+                style={{ animationDelay: `${i * 50}ms` }}
+              >
                 <div className="mb-2 text-center text-xs sm:text-sm font-semibold text-slate-200">
                   {m.home} vs {m.away}
                 </div>
@@ -527,9 +711,9 @@ export default function PlayPage() {
         <button
           onClick={handleSubmit}
           disabled={submitPending || totalPicks === 0}
-          className="w-full rounded-xl bg-emerald-500 px-6 py-4 text-base font-bold text-white shadow-lg transition hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed min-h-12"
+          className="w-full rounded-xl bg-emerald-500 px-6 py-4 text-base font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-400 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed min-h-12"
         >
-          {submitPending ? "Submitting..." : `Lock Picks (${totalPicks}/${DEMO_TEAMS.length + 4})`}
+          {submitPending ? "Submitting..." : `Lock Picks (${totalPicks}/${WC2026_R16.length + 6})`}
         </button>
       </div>
 
@@ -537,4 +721,11 @@ export default function PlayPage() {
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
+}
+
+// ---------- Helper ----------
+function formatMatchMinute(minute: number): string {
+  if (minute > 45 && minute <= 50) return `45+${minute - 45}`;
+  if (minute > 90 && minute <= 95) return `90+${minute - 90}`;
+  return `${minute}'`;
 }

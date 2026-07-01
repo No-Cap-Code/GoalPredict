@@ -22,7 +22,9 @@
       "Bash(python3 -m json.tool)",
       "Bash(cast wallet *)",
       "Bash(gh repo *)",
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "Bash(node *)",
+      "Bash(/══════════════════════════════════════════════════\\\\n  // Group H — Argentina seeded\\\\n  // ═══════════════════════════════════════════════════\\\\n  { name: \\\\\"Argentina\\\\\", code: \\\\\"ARG\\\\\", flag: FLAG_MAP[\\\\\"Argentina\\\\\"], confederation: \\\\\"CONMEBOL\\\\\", group: \\\\\"H\\\\\", seeded: true },\\\\n  { name: \\\\\"Iraq\\\\\", code: \\\\\"IRQ\\\\\", flag: FLAG_MAP[\\\\\"Iraq\\\\\"], confederation: \\\\\"AFC\\\\\", group: \\\\\"H\\\\\" },\\\\n  { name: \\\\\"South Africa\\\\\", code: \\\\\"RSA\\\\\", flag: FLAG_MAP[\\\\\"South Africa\\\\\"], confederation: \\\\\"CAF\\\\\", group: \\\\\"H\\\\\" },\\\\n  { name: \\\\\"Panama\\\\\", code: \\\\\"PAN\\\\\", flag: FLAG_MAP[\\\\\"Panama\\\\\"], confederation: \\\\\"CONCACAF\\\\\", group: \\\\\"H\\\\\" },\\\\n  { name: \\\\\"Portugal\\\\\", code: \\\\\"POR\\\\\", flag: FLAG_MAP[\\\\\"Portugal\\\\\"], confederation: \\\\\"UEFA\\\\\", group: \\\\\"H\\\\\", seeded: true },\\\\n)"
     ]
   }
 }
