@@ -70,7 +70,7 @@ export default function Home() {
   const { isConnected } = useAccount();
 
   // Read live tournament data (id = 0)
-  const { data } = useReadContract({
+  const { data, isError, error } = useReadContract({
     address: ADDRESSES.GoalPredictCore,
     abi: GoalPredictCoreABI,
     functionName: "getTournament",
@@ -82,6 +82,11 @@ export default function Home() {
   const poolSize = t ? Number(t[5]) / 1e18 : 0;
   const entrants = 0; // TODO: wire up getEntrantsCount
   const prizePerPick = t ? Number(t[6][0]) / 1e18 : 0; // first round pool
+
+  // Debug: log errors to console
+  if (isError) {
+    console.error("Contract read error:", error);
+  }
 
   return (
     <div className="bg-pitch relative overflow-hidden">

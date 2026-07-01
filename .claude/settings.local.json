@@ -25,7 +25,8 @@
       "Bash(gh api *)",
       "Bash(node *)",
       "Bash(/══════════════════════════════════════════════════\\\\n  // Group H — Argentina seeded\\\\n  // ═══════════════════════════════════════════════════\\\\n  { name: \\\\\"Argentina\\\\\", code: \\\\\"ARG\\\\\", flag: FLAG_MAP[\\\\\"Argentina\\\\\"], confederation: \\\\\"CONMEBOL\\\\\", group: \\\\\"H\\\\\", seeded: true },\\\\n  { name: \\\\\"Iraq\\\\\", code: \\\\\"IRQ\\\\\", flag: FLAG_MAP[\\\\\"Iraq\\\\\"], confederation: \\\\\"AFC\\\\\", group: \\\\\"H\\\\\" },\\\\n  { name: \\\\\"South Africa\\\\\", code: \\\\\"RSA\\\\\", flag: FLAG_MAP[\\\\\"South Africa\\\\\"], confederation: \\\\\"CAF\\\\\", group: \\\\\"H\\\\\" },\\\\n  { name: \\\\\"Panama\\\\\", code: \\\\\"PAN\\\\\", flag: FLAG_MAP[\\\\\"Panama\\\\\"], confederation: \\\\\"CONCACAF\\\\\", group: \\\\\"H\\\\\" },\\\\n  { name: \\\\\"Portugal\\\\\", code: \\\\\"POR\\\\\", flag: FLAG_MAP[\\\\\"Portugal\\\\\"], confederation: \\\\\"UEFA\\\\\", group: \\\\\"H\\\\\", seeded: true },\\\\n)",
-      "Bash(PRIVATE_KEY=0xf811270a1c009c63ca5e50b643c53a0cafc04ca124eb8da88f904e58950b2e46 forge script script/Deploy.s.sol --rpc-url https://sepolia.base.org --broadcast)"
+      "Bash(PRIVATE_KEY=0xf811270a1c009c63ca5e50b643c53a0cafc04ca124eb8da88f904e58950b2e46 forge script script/Deploy.s.sol --rpc-url https://sepolia.base.org --broadcast)",
+      "Bash(fuser -k 3000/tcp 3001/tcp 3002/tcp 3003/tcp)"
     ]
   }
 }

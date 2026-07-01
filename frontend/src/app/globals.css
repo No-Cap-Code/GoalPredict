@@ -113,13 +113,13 @@ body {
   animation: slide-in 0.3s ease-out;
 }
 
-@keyframes slide-in {
-  0% { transform: translateY(20px); opacity: 0; }
+@keyframes slide-down {
+  0% { transform: translateY(-10px); opacity: 0; }
   100% { transform: translateY(0); opacity: 1; }
 }
 
-.animate-slide-in {
-  animation: slide-in 0.3s ease-out;
+.animate-slide-down {
+  animation: slide-down 0.3s ease-out;
 }
 
 @keyframes fade-in-up {
@@ -221,11 +221,8 @@ body {
 
 /* Smooth focus ring */
 .focus-ring:focus-visible {
-  outline: none;
-  ring: 2px;
-  ring-color: var(--pitch-light);
-  ring-offset: 2px;
-  ring-offset-color: var(--background);
+  outline: 2px solid var(--pitch-light);
+  outline-offset: 2px;
 }
 
 /* Stats counter animation */
