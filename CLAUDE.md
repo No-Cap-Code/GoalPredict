@@ -1,60 +1,56 @@
-# GoalPredict ⚽🏆
+# CLAUDE.md
 
-**Football knockout bracket predictor with USDT staking.**
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
-GoalPredict is a dApp for the Tether Developers Cup hackathon.
-Fans stake USDT to predict knockout match outcomes in a football tournament.
-Winners split the prize pool proportionally each round.
+## GoalPredict ⚽🏆
 
-## Tech Stack
-- **Smart Contracts**: Solidity 0.8.25, Foundry (forge/foclor)
-- **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS
-- **Web3**: wagmi v2, viem, ConnectKit
-- **Network**: Base Sepolia (testnet) for demo
-- **Token**: USDT (ERC-20)
+Football knockout bracket predictor with USDT staking. Built for the **Tether Developers Cup** hackathon.
+
+**Tracks:** WDK (Wallets) + QVAC (Local AI)
+
+## Commands
+
+```bash
+# Contracts — Foundry
+cd contracts && forge build          # Compile contracts
+cd contracts && forge test           # Run all tests
+cd contracts && forge test --match-test testName  # Single test
+
+# Frontend — Next.js 14
+cd frontend && npm install           # Install deps
+cd frontend && npm run dev           # Dev server (localhost:3000)
+cd frontend && npm run build         # Production build
+cd frontend && npm run lint          # ESLint check
+```
 
 ## Architecture
-```
-contracts/
-  src/
-    GoalPredictCore.sol    — Main tournament contract
-    BracketNFT.sol         — ERC-721 bracket tickets
-    MockUSDT.sol           — Testnet USDT mock
-    interfaces/
-      IGoalPredict.sol     — Core interface
-  test/                    — Foundry tests
-  script/                  — Deploy scripts
 
-frontend/
-  src/
-    app/                   — Next.js pages
-    components/            — React components
-    lib/                   — Config, ABIs, helpers
-    hooks/                 — Custom React hooks
-    types/                 — TypeScript types
-```
+**Monorepo** with two independent packages:
+- `contracts/` — Foundry (Solidity 0.8.25)
+- `frontend/` — Next.js 14 App Router (TypeScript + Tailwind)
+
+### Smart Contracts
+- `GoalPredictCore.sol` — Tournament pool: USDT deposits, bracket submissions, round resolution, prize payouts. Uses OpenZeppelin Ownable + ReentrancyGuard. Prize split: 50% R1 → 25% R2 → 15% R3 → 10% Final.
+- `BracketNFT.sol` — ERC-721 tickets representing a fan's bracket picks. Metadata stores picks per round.
+- `MockUSDT.sol` — Testnet ERC-20 USDT mock with public mint.
+- Oracle is admin multi-sig for hackathon demo (Chainlink Functions in prod).
+
+### Frontend Stack
+- wagmi v2 + viem + ConnectKit for wallet connection
+- `@tetherto/wdk` — Wallet Development Kit for self-custodial USDT wallet
+- `@qvac/sdk` — Local AI for on-device match predictions (no cloud APIs)
+- Base Sepolia testnet (chain ID 84532)
+
+### Key Data Flow
+Fan → WDK wallet connect → USDT deposit to pool → bracket picks (QVAC AI-assisted) → picks locked on-chain → admin resolves round → winners claim USDT
 
 ## Key Decisions
-- **Oracle**: Admin multi-sig for hackathon demo (Chainlink Functions in prod)
-- **Payout**: Fixed per correct pick per round (clear UX)
-- **Chain**: Base Sepolia (cheap, Coinbase Wallet native)
-- **NFT**: Tradeable ERC-721 bracket tickets
-- **Prize Pool**: 50% R1 → 25% R2 → 15% R3 → 10% Final
-
-## Running
-```bash
-# Contracts
-cd contracts && forge test
-cd contracts && forge script script/Deploy.s.sol
-
-# Frontend
-cd frontend && npm install
-cd frontend && npm run dev
-```
+- **Oracle:** Admin multi-sig for hackathon (documented: Chainlink in prod)
+- **Payout:** Fixed per correct pick per round
+- **Chain:** Base Sepolia (cheap, Coinbase Wallet native)
+- **NFT:** Tradeable ERC-721 bracket tickets
 
 ## Third-Party Services
-- wagmi/viem — Web3 connection
-- ConnectKit — Wallet connection UI
-- Base Sepolia — Testnet
-- OpenZeppelin — ERC-20, ERC-721, Ownable
+- `@tetherto/wdk` + `@tetherto/wdk-wallet-evm` — wallet
+- `@qvac/sdk` — local AI inference
+- OpenZeppelin — ERC-20, ERC-721, Ownable, ReentrancyGuard

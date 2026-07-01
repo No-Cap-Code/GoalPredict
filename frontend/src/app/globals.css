@@ -3,25 +3,109 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --pitch-green: #1a472a;
+  --pitch-light: #22c55e;
+  --gold: #fbbf24;
+  --dark-gold: #f59e0b;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #020617;
+    --foreground: #f1f5f9;
+    --pitch-green: #0f3118;
+    --pitch-light: #22c55e;
+    --gold: #fbbf24;
+    --dark-gold: #f59e0b;
   }
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: linear-gradient(135deg, var(--background), #1e293b);
+  font-family: system-ui, -apple-system, sans-serif;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(34, 197, 94, 0.5);
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 197, 94, 0.8);
+}
+
+/* Pitch light effect */
+.bg-pitch {
+  background-color: var(--pitch-green);
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, transparent 70%),
+    linear-gradient(135deg, var(--pitch-green), var(--pitch-light));
+}
+
+.border-pitch {
+  border-color: var(--pitch-light);
+}
+
+.text-gold {
+  color: var(--gold);
+}
+
+.bg-gold {
+  background-color: var(--gold);
+}
+
+.border-gold {
+  border-color: var(--gold);
+}
+
+/* Animations */
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-pulse-green {
+  animation: pulse-green 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes progress-bar {
+  0% { width: 0%; }
+  100% { width: var(--progress-width); }
+}
+
+.animate-progress {
+  animation: progress-bar 1s ease-out forwards;
+}
+
+/* Bracket drawing lines */
+.brACKET-line {
+  background: linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.3), transparent);
+}
+.brACKET-vertical {
+  background: linear-gradient(180deg, transparent, rgba(34, 197, 94, 0.2), transparent);
+}
+
+.team-flag {
+  font-family: monospace;
 }

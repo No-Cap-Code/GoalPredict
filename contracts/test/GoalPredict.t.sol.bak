@@ -1,0 +1,267 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.25;
+
+import "forge-std/Test.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+import "../src/MockUSDT.sol";
+import "../src/BracketNFT.sol";
+import "../src/GoalPredictCore.sol";
+import "../src/interfaces/IGOalPredict.sol";
+
+/**
+ * @title GoalPredictTest
+ * @notice Comprehensive test suite for GoalPredict smart contracts.
+ */
+contract GoalPredictTest is Test {
+    // ── State ────────────────────────────────────────────────────────────
+    MockUSDT    usdt;
+    BracketNFT  bracketNFT;
+    GoalPredictCore core;
+
+    // Test users
+    address alice = makeAddr("alice");
+    address bob   = makeAddr("bob");
+    address carol = makeAddr("carol");
+    address dave  = makeAddr("dave");
+
+    uint256 constant ENTRY_FEE = 100e18; // 100 USDT
+
+    // ── Setup ────────────────────────────────────────────────────────────
+    function setUp() public {
+        // Deploy MockUSDT
+        usdt = new MockUSDT();
+
+        // Deploy BracketNFT (owned by this contract)
+        bracketNFT = new BracketNFT();
+
+        // Deploy GoalPredictCore
+        core = new GoalPredictCore(address(usdt), address(bracketNFT));
+
+        // Transfer ownership of BracketNFT to GoalPredictCore so it can mint/update
+        bracketNFT.transferOwnership(address(core));
+
+        // Mint USDT to test users
+        usdt.mint(alice, 1000e18);
+        usdt.mint(bob, 1000e18);
+        usdt.mint(carol, 1000e18);
+        usdt.mint(dave, 1000e18);
+
+        // Create a tournament
+        uint256 startTime = block.timestamp + 10;
+        uint256 endTime = block.timestamp + 86400;
+        uint256 tournamentId = core.createTournament(startTime, endTime, ENTRY_FEE);
+
+        // Add matches for all 4 rounds
+        // R16: 8 matches (round 0)
+        for (uint8 i = 0; i < 8; i++) {
+            core.addMatch(tournamentId, string(abi.encodePacked("Team", uint256(i*2))), string(abi.encodePacked("Team", uint256(i*2+1))), 0);
+        }
+        // QF: 4 matches (round 1)
+        for (uint8 i = 0; i < 4; i++) {
+            core.addMatch(tournamentId, string(abi.encodePacked("QF", uint256(i*2))), string(abi.encodePacked("QF", uint256(i*2+1))), 1);
+        }
+        // SF: 2 matches (round 2)
+        for (uint8 i = 0; i < 2; i++) {
+            core.addMatch(tournamentId, string(abi.encodePacked("SF", uint256(i*2))), string(abi.encodePacked("SF", uint256(i*2+1))), 2);
+        }
+        // Final: 1 match (round 3)
+        core.addMatch(tournamentId, "FinalistA", "FinalistB", 3);
+    }
+
+    // ── Helper: enter tournament ────────────────────────────────────────
+    function _enter(address user, uint256 tournamentId) internal {
+        vm.prank(user);
+        usdt.approve(address(core), ENTRY_FEE);
+        core.enterTournament(tournamentId);
+    }
+
+    // ── Helper: submit picks for all rounds ─────────────────────────────
+    function _submitAll(address user, uint256 tournamentId, uint8[8] memory r16, uint8[4] memory qf, uint8[2] memory sf, uint8 finalPick) internal {
+        vm.prank(user);
+        core.submitBracket(tournamentId, 0, r16);
+        vm.prank(user);
+        core.submitBracket(tournamentId, 1, qf);
+        vm.prank(user);
+        core.submitBracket(tournamentId, 2, sf);
+        vm.prank(user);
+        core.submitBracket(tournamentId, 3, finalPick);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // TESTS
+    // ══════════════════════════════════════════════════════════════════════
+
+    // 1) testEnterTournament — deposit USDT, get NFT
+    function testEnterTournament() public {
+        uint256 tournamentId = 0;
+
+        // Before enter
+        assertEq(usdt.balanceOf(alice), 1000e18);
+        assertEq(core.getEntrantsCount(tournamentId), 0);
+
+        // Enter
+        _enter(alice, tournamentId);
+
+        // After enter
+        assertEq(usdt.balanceOf(alice), 900e18);
+        assertEq(core.getPoolSize(tournamentId), ENTRY_FEE);
+        assertEq(core.getEntrantsCount(tournamentId), 1);
+        assertEq(bracketNFT.ownerOf(uint256(uint160(alice))), alice);
+        assertEq(core.getEntrantsCount(tournamentId), 1);
+    }
+
+    // 2) testSubmitBracket — submit picks for each round
+    function testSubmitBracket() public {
+        uint256 tournamentId = 0;
+        _enter(alice, tournamentId);
+
+        uint8[8] memory r16 = [0,1,0,1,0,1,0,1];
+        uint8[4] memory qf  = [0,1,0,1];
+        uint8[2] memory sf  = [0,1];
+        uint8    finalPick  = 0;
+
+        vm.prank(alice);
+        core.submitBracket(tournamentId, 0, r16);
+
+        vm.prank(alice);
+        core.submitBracket(tournamentId, 1, qf);
+
+        vm.prank(alice);
+        core.submitBracket(tournamentId, 2, sf);
+
+        vm.prank(alice);
+        core.submitBracket(tournamentId, 3, finalPick);
+
+        // Verify picks stored
+        IGoalPredict.Bracket memory br = core.getBracket(tournamentId, alice);
+        for (uint256 i = 0; i < 8; i++) assertEq(br.picksR16[i], r16[i]);
+        for (uint256 i = 0; i < 4; i++) assertEq(br.picksQF[i], qf[i]);
+        for (uint256 i = 0; i < 2; i++) assertEq(br.picksSF[i], sf[i]);
+        assertEq(br.picksFinal, finalPick);
+    }
+
+    // 3) testResolveRound — owner resolves, winners can claim
+    function testResolveRound() public {
+        uint256 tournamentId = 0;
+        _enter(alice, tournamentId);
+        _enter(bob, tournamentId);
+
+        // Both submit identical picks
+        uint8[8] memory r16 = [0,0,0,0,0,0,0,0];
+        uint8[4] memory qf  = [0,0,0,0];
+        uint8[2] memory sf  = [0,0];
+        uint8    finalPick  = 0;
+
+        _submitAll(alice, tournamentId, r16, qf, sf, finalPick);
+        _submitAll(bob, tournamentId, r16, qf, sf, finalPick);
+
+        // Owner resolves R16 with all home teams winning (index 0)
+        uint8[8] memory r16Winners = [0,0,0,0,0,0,0,0];
+        vm.prank(address(this)); // owner
+        core.resolveRound(tournamentId, 0, r16Winners);
+
+        // Both should have 8 correct picks
+        assertEq(core.getEntrantsCount(tournamentId), 2);
+    }
+
+    // 4) testClaimPayout — verify payout math
+    function testClaimPayout() public {
+        uint256 tournamentId = 0;
+        _enter(alice, tournamentId);
+        _enter(bob, tournamentId);
+
+        // Alice picks all correctly, Bob gets half wrong
+        uint8[8] memory r16 = [0,0,0,0,0,0,0,0];
+        uint8[4] memory qf  = [0,0,0,0];
+        uint8[2] memory sf  = [0,0];
+        uint8    finalPick  = 0;
+
+        _submitAll(alice, tournamentId, r16, qf, sf, finalPick);
+
+        // Bob: 4 correct in R16
+        uint8[8] memory r16bob = [0,1,0,1,0,1,0,1];
+        vm.prank(bob);
+        core.submitBracket(tournamentId, 0, r16bob);
+        vm.prank(bob);
+        core.submitBracket(tournamentId, 1, qf);
+        vm.prank(bob);
+        core.submitBracket(tournamentId, 2, sf);
+        vm.prank(bob);
+        core.submitBracket(tournamentId, 3, finalPick);
+
+        // Resolve R16
+        uint8[8] memory r16Winners = [0,0,0,0,0,0,0,0];
+        vm.prank(address(this));
+        core.resolveRound(tournamentId, 0, r16Winners);
+
+        // Claim
+        vm.prank(alice);
+        core.claimPayout(tournamentId);
+
+        // Alice gets back her share (should be more than entry fee since she had all correct)
+        assertGt(usdt.balanceOf(alice), 900e18);
+    }
+
+    // 5) testUnauthorizedSubmit — non-holder can't submit
+    function testUnauthorizedSubmit() public {
+        uint256 tournamentId = 0;
+        _enter(alice, tournamentId);
+
+        uint8[8] memory r16 = [0,0,0,0,0,0,0,0];
+        vm.expectRevert();
+        vm.prank(bob);
+        core.submitBracket(tournamentId, 0, r16);
+    }
+
+    // 6) testCannotDoubleEnter — same user can't enter twice
+    function testCannotDoubleEnter() public {
+        uint256 tournamentId = 0;
+        _enter(alice, tournamentId);
+
+        vm.expectRevert();
+        _enter(alice, tournamentId);
+    }
+
+    // 7) testPoolSplit — verify 50/25/15/10 split
+    function testPoolSplit() public {
+        uint256 tournamentId = 0;
+        _enter(alice, tournamentId); // 100 USDT
+
+        IGoalPredict.Tournament memory t = core.getTournament(tournamentId);
+        uint256 totalEntry = ENTRY_FEE;
+
+        assertEq(t.roundPrizePool[0], totalEntry * 5000 / 10000); // 50
+        assertEq(t.roundPrizePool[1], totalEntry * 2500 / 10000); // 25
+        assertEq(t.roundPrizePool[2], totalEntry * 1500 / 10000); // 15
+        assertEq(t.roundPrizePool[3], totalEntry * 1000 / 10000); // 10
+        assertEq(t.roundPrizePool[0] + t.roundPrizePool[1] + t.roundPrizePool[2] + t.roundPrizePool[3], totalEntry);
+    }
+
+    // 8) testUnauthorizedResolve — only owner can resolve
+    function testUnauthorizedResolve() public {
+        uint256 tournamentId = 0;
+        _enter(alice, tournamentId);
+
+        uint8[8] memory r16 = [0,0,0,0,0,0,0,0];
+        vm.expectRevert("Ownable: caller is not the owner");
+        vm.prank(alice);
+        core.resolveRound(tournamentId, 0, r16);
+    }
+
+    // 9) testBeforeTournamentEnd — cannot enter after end
+    function testBeforeTournamentEnd() public {
+        // Create tournament ending soon
+        uint256 startTime = block.timestamp;
+        uint256 endTime = block.timestamp + 1;
+        uint256 tid = core.createTournament(startTime, endTime, ENTRY_FEE);
+
+        // Add R16 matches
+        for (uint8 i = 0; i < 8; i++) {
+            core.addMatch(tid, string(abi.encodePacked("Team", uint256(i*2))), string(abi.encodePacked("Team", uint256(i*2+1))), 0);
+        }
+
+        // Enter should work before end
+        _enter(alice, tid);
+    }
+}

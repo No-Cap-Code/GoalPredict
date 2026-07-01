@@ -7,7 +7,15 @@
       "Bash(git init *)",
       "Bash(git config *)",
       "Skill(update-config)",
-      "Bash(rm -f src/Counter.sol test/Counter.t.sol script/Counter.s.sol)"
+      "Bash(rm -f src/Counter.sol test/Counter.t.sol script/Counter.s.sol)",
+      "Bash(rm -rf .next)",
+      "Bash(node node_modules/.bin/next build)",
+      "Read(//tmp/**)",
+      "Bash(tee /tmp/build.log)",
+      "Bash(solc --version)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('abi',[]\\), indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); abi=d.get\\('abi',[]\\); [print\\(f['name']\\) for f in abi if f['type']=='function']\")",
+      "Bash(tee /tmp/forge-error.txt)"
     ]
   }
 }
