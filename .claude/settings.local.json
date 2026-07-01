@@ -20,7 +20,9 @@
       "Bash(tee /tmp/forge-build.txt)",
       "Bash(tee /tmp/forge-full.txt)",
       "Bash(python3 -m json.tool)",
-      "Bash(cast wallet *)"
+      "Bash(cast wallet *)",
+      "Bash(gh repo *)",
+      "Bash(gh api *)"
     ]
   }
 }
