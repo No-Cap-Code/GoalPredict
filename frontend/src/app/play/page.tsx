@@ -250,9 +250,13 @@ export default function PlayPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const { enter, isPending: enterPending, hash: enterHash, error: enterError, isConfirming: enterConfirming } = useEnterTournament();
+
+  // Tournament ID (2 = new correctly-seeded tournament on Base Sepolia)
+  const TID = 2n;
   const { submit, isPending: submitPending, hash: submitHash, error: submitError, isConfirming: submitConfirming } = useSubmitBracket();
+  const publicClient = usePublicClient();
 
   const [picks, setPicks] = useState<Record<number, string>>({});
   const [predictions, setPredictions] = useState<
@@ -264,9 +268,25 @@ export default function PlayPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastIdRef = useRef(0);
 
-  // Check if user already entered by reading their USDT balance vs expected
-  // If they have less than initial - entryFee, they already entered
+  // Check if user already entered by reading BracketNFT ownerOf
   const [hasEntered, setHasEntered] = useState(false);
+  const bracketTokenId = address ? BigInt(address.toLowerCase()) : 0n;
+
+  useEffect(() => {
+    if (!publicClient || !address || !mounted) return;
+    publicClient.readContract({
+      address: ADDRESSES.BracketNFT,
+      abi: [{ name: "ownerOf", type: "function", inputs: [{ name: "tokenId", type: "uint256" }], outputs: [{ name: "", type: "address" }], stateMutability: "view" }],
+      functionName: "ownerOf",
+      args: [bracketTokenId],
+    }).then((owner) => {
+      if (owner.toLowerCase() === address.toLowerCase()) {
+        setHasEntered(true);
+      }
+    }).catch(() => {
+      // ownerOf reverts = token doesn't exist = not entered
+    });
+  }, [publicClient, address, mounted, bracketTokenId]);
 
   // When user enters successfully, update state
   useEffect(() => {
@@ -281,7 +301,7 @@ export default function PlayPage() {
     address: ADDRESSES.GoalPredictCore,
     abi: GoalPredictCoreABI,
     functionName: "getMatchesCount",
-    args: [0n],
+    args: [TID],
     query: { enabled: mounted && isConnected, refetchInterval: 15_000 },
   });
   const matchesCount = matchesCountRaw ? Number(matchesCountRaw) : 0;
@@ -291,14 +311,13 @@ export default function PlayPage() {
     address: ADDRESSES.GoalPredictCore,
     abi: GoalPredictCoreABI,
     functionName: "getTournament",
-    args: [0n],
+    args: [TID],
     query: { enabled: mounted && isConnected },
   });
   const t = tournamentData as unknown as [bigint, bigint, bigint, bigint, number, bigint, bigint[]] | undefined;
   const entryFeeUSDT = t ? (Number(t[3]) || 0) / 1e18 : 10;
 
   // ----- Fetch all matches via publicClient in a useEffect -----
-  const publicClient = usePublicClient();
   const [contractMatches, setContractMatches] = useState<ContractMatch[]>([]);
 
   useEffect(() => {
@@ -312,7 +331,7 @@ export default function PlayPage() {
               address: ADDRESSES.GoalPredictCore,
               abi: GoalPredictCoreABI,
               functionName: "getMatch",
-              args: [0n, BigInt(i)],
+              args: [TID, BigInt(i)],
             })
           )
         );
@@ -429,7 +448,13 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (enterError) {
-      addToast("error", `Enter failed: ${enterError.message}`);
+      // Check if error is "already entered" — not a real error
+      if (enterError.message?.includes("already entered")) {
+        addToast("success", "You're already in the tournament!");
+        setHasEntered(true);
+      } else {
+        addToast("error", `Enter failed: ${enterError.message}`);
+      }
     }
   }, [enterError, addToast]);
 
@@ -594,7 +619,7 @@ export default function PlayPage() {
       if (!p) return 0;
       return p === m.homeTeam ? 0 : 1;
     });
-    submit(0, 0, pickIndices); // tournamentId=0, round=0 (R16)
+    submit(Number(TID), 0, pickIndices); // TID, round=0 (R16)
   }, [picks, submit, r16Matches]);
 
   // Total possible picks: R16 matches (from contract) + 7 (QF4 + SF2 + Final1)
@@ -672,7 +697,7 @@ export default function PlayPage() {
         </div>
         {!hasEntered ? (
           <button
-            onClick={() => enter(0)}
+            onClick={() => enter(Number(TID))}
             disabled={enterPending}
             className="sm:ml-auto rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-amber-500 hover:scale-105 active:scale-95 disabled:opacity-40 min-h-12 disabled:hover:scale-100"
           >
