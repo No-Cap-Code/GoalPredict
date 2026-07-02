@@ -82,9 +82,9 @@ export default function Home() {
   });
 
   const t = data as unknown as [bigint, bigint, bigint, bigint, number, bigint, bigint[]] | undefined;
-  const poolSize = t ? Number(t[5]) / 1e18 : 0;
+  const poolSize = t ? (Number(t[5]) || 0) / 1e18 : 0;
   const entrants = 0; // TODO: wire up getEntrantsCount
-  const prizePerPick = t && t[6]?.length ? Number(t[6][0]) / 1e18 : 0; // first round pool
+  const prizePerPick = t && t[6]?.length ? (Number(t[6][0]) || 0) / 1e18 : 0; // first round pool
 
   // Debug: log errors to console
   if (isError) {
