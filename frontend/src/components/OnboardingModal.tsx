@@ -41,9 +41,13 @@ export default function OnboardingModal() {
   const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
-    const completed = localStorage.getItem(STORAGE_KEY);
-    if (!completed) {
-      setIsOpen(true);
+    try {
+      const completed = localStorage.getItem(STORAGE_KEY);
+      if (!completed) {
+        setIsOpen(true);
+      }
+    } catch {
+      // localStorage unavailable during SSR
     }
   }, []);
 
@@ -54,7 +58,11 @@ export default function OnboardingModal() {
   }, [currentStep]);
 
   const handleComplete = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, "true");
+    try {
+      localStorage.setItem(STORAGE_KEY, "true");
+    } catch {
+      // localStorage unavailable during SSR
+    }
     setIsOpen(false);
     setCurrentStep(0);
   }, []);

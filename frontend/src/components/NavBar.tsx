@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectKitButton } from "connectkit";
@@ -20,6 +20,8 @@ const NAV_LINKS = [
 export default function NavBar() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const closeMenu = () => setIsMenuOpen(false);
 
@@ -73,7 +75,7 @@ export default function NavBar() {
 
         {/* Wallet connect - desktop */}
         <div className="hidden sm:block">
-          <ConnectKitButton />
+          {mounted && <ConnectKitButton />}
         </div>
 
         {/* Mobile dropdown menu */}
@@ -95,7 +97,7 @@ export default function NavBar() {
                 </Link>
               ))}
               <div className="pt-2 border-t border-slate-800">
-                <ConnectKitButton />
+                {mounted && <ConnectKitButton />}
               </div>
             </nav>
           </div>

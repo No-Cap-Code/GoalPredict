@@ -6,12 +6,15 @@
 "use client";
 
 import { useAccount } from "wagmi";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWriteContract } from "wagmi";
 import { GoalPredictCoreABI, ADDRESSES } from "@/lib/contracts";
 import { TEAMS } from "@/lib/worldcup2026";
 
 export default function AdminPage() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const { address } = useAccount();
 
   const isOwner = true; // TODO: verify against contract owner
@@ -80,6 +83,10 @@ export default function AdminPage() {
       args: [BigInt(0), 0, [0, 0, 0, 0, 0, 0, 0, 0]], // demo: all home teams win R16
     });
   };
+
+  if (!mounted) {
+    return <div className="flex items-center justify-center min-h-screen"><p className="text-slate-400">Loading...</p></div>;
+  }
 
   if (!isOwner) {
     return (

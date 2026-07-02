@@ -28,7 +28,8 @@
       "Bash(PRIVATE_KEY=0xf811270a1c009c63ca5e50b643c53a0cafc04ca124eb8da88f904e58950b2e46 forge script script/Deploy.s.sol --rpc-url https://sepolia.base.org --broadcast)",
       "Bash(fuser -k 3000/tcp 3001/tcp 3002/tcp 3003/tcp)",
       "Bash(tee /tmp/build-output.txt)",
-      "Bash(vercel *)"
+      "Bash(vercel *)",
+      "Bash(tee /tmp/build_output.txt)"
     ]
   }
 }

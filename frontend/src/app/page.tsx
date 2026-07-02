@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAccount, useReadContract } from "wagmi";
 import { GoalPredictCoreABI, ADDRESSES } from "@/lib/contracts";
@@ -67,6 +67,9 @@ const FAQ_ITEMS = [
 ];
 
 export default function Home() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const { isConnected } = useAccount();
 
   // Read live tournament data (id = 0)
@@ -86,6 +89,10 @@ export default function Home() {
   // Debug: log errors to console
   if (isError) {
     console.error("Contract read error:", error);
+  }
+
+  if (!mounted) {
+    return <div className="flex items-center justify-center min-h-screen"><p className="text-slate-400">Loading...</p></div>;
   }
 
   return (

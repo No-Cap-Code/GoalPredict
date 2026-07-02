@@ -5,6 +5,7 @@
 
 "use client";
 
+import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 import { ConnectKitButton } from "connectkit";
 import { useClaimPayout } from "@/hooks/useGoalPredict";
@@ -148,6 +149,9 @@ const LEADERBOARD = [
 ];
 
 export default function ResultsPage() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const { isConnected, address } = useAccount();
   const { claim, isPending, error } = useClaimPayout();
 
@@ -163,6 +167,10 @@ export default function ResultsPage() {
   const userByRound = ROUND_LABELS.map((_, idx) =>
     RESOLVED_MATCHES.filter((m) => m.round === idx && m.correct).length
   );
+
+  if (!mounted) {
+    return <div className="flex items-center justify-center min-h-screen"><p className="text-slate-400">Loading...</p></div>;
+  }
 
   if (!isConnected) {
     return (

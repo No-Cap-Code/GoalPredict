@@ -7,7 +7,8 @@ import { baseSepolia, foundry } from "wagmi/chains";
 import { getDefaultConfig } from "connectkit";
 
 // Use Anvil (local) by default for demo, Base Sepolia for production
-const isLocal = process.env.NEXT_PUBLIC_LOCAL === "true";
+const isClient = typeof window !== "undefined";
+const isLocal = isClient && process.env.NEXT_PUBLIC_LOCAL === "true";
 const chain = isLocal ? foundry : baseSepolia;
 const RPC_URL = isLocal
   ? "http://127.0.0.1:8545"

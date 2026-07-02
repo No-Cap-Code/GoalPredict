@@ -269,6 +269,9 @@ function HelpTooltip({ text }: { text: string }) {
 
 // ========== MAIN COMPONENT ==========
 export default function PlayPage() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const { isConnected } = useAccount();
   const { enter, isPending: enterPending, hash: enterHash, error: enterError, isConfirming: enterConfirming } = useEnterTournament();
   const { submit, isPending: submitPending, hash: submitHash, error: submitError, isConfirming: submitConfirming } = useSubmitBracket();
@@ -496,6 +499,10 @@ export default function PlayPage() {
   }, [picks, submit]);
 
   // ---------- Not connected ----------
+  if (!mounted) {
+    return <div className="flex items-center justify-center min-h-screen"><p className="text-slate-400">Loading...</p></div>;
+  }
+
   if (!isConnected) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
