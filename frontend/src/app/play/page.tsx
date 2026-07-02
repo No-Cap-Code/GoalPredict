@@ -603,10 +603,11 @@ export default function PlayPage() {
     });
   }, [modelReady, predictions, r16Matches]);
 
-  // Handle pick
+  // Handle pick with toast confirmation
   const handlePick = useCallback((matchId: number, team: string) => {
     setPicks((prev) => ({ ...prev, [matchId]: team }));
-  }, []);
+    addToast("success", `${team} selected!`);
+  }, [addToast]);
 
   // Submit picks on-chain for Round 0 (R16)
   const handleSubmit = useCallback(() => {
@@ -784,24 +785,30 @@ export default function PlayPage() {
         )}
       </div>
 
-      {/* Bracket - collapsible on very small screens */}
+      {/* Bracket - ALWAYS VISIBLE */}
       <div className="mb-10">
-        <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">
+        <h2 className="text-xl sm:text-2xl font-bold text-white mb-2 flex items-center gap-2">
+          <span className="text-emerald-400">⚽</span>
           Knockout Bracket
         </h2>
-        <p className="text-slate-400 mb-4 text-sm">
+        <p className="text-slate-400 mb-2 text-sm">
           {contractMatches.length > 0
-            ? `Select your winners for each round. ${contractMatches.length} matches in the tournament.`
-            : "Select your winners for each round. Loading matches from contract..."}
+            ? `Click on a team to pick them as the winner. R16: ${r16Matches.length} matches. Total: ${contractMatches.length} matches across all rounds.`
+            : "Loading matches from contract..."}
         </p>
-        <details className="mb-6 sm:mb-0 sm:contents">
-          <summary className="sm:hidden cursor-pointer text-sm font-semibold text-emerald-400 mb-3 select-none">
-            View Bracket
-          </summary>
-          <div className="animate-fade-in-up animation-delay-300">
-            <BracketVisual rounds={rounds} onPick={handlePick} />
-          </div>
-        </details>
+        {/* Match overview bar */}
+        <div className="flex flex-wrap items-center gap-3 mb-4 text-xs">
+          <span className="bg-emerald-900/40 text-emerald-300 px-2 py-1 rounded-full font-bold">R16: {r16Matches.length} matches</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-amber-900/40 text-amber-300 px-2 py-1 rounded-full font-bold">QF: {matchesByRound[1]?.length || 0} matches</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-rose-900/40 text-rose-300 px-2 py-1 rounded-full font-bold">SF: {matchesByRound[2]?.length || 0} matches</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full font-bold">Final: {matchesByRound[3]?.length || 0}</span>
+        </div>
+        <div className="animate-fade-in-up">
+          <BracketVisual rounds={rounds} onPick={handlePick} />
+        </div>
       </div>
 
       {/* AI Predictions panel with tooltip */}
