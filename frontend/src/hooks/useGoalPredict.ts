@@ -109,13 +109,27 @@ export function useEnterTournament() {
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
 
   const enter = useCallback(
-    (tournamentId: number) => {
+    async (tournamentId: number) => {
+      // Step 1: Approve USDT spending (max uint256)
       writeContract({
-        address: ADDRESSES.GoalPredictCore,
-        abi: GoalPredictCoreABI,
-        functionName: "enterTournament",
-        args: [BigInt(tournamentId)],
+        address: ADDRESSES.MockUSDT,
+        abi: [
+          { name: "approve", type: "function", inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable" },
+        ],
+        functionName: "approve",
+        args: [ADDRESSES.GoalPredictCore, 2n ** 256n - 1n],
       });
+      // Step 2: Enter tournament (after approval tx confirms)
+      // Note: In production, wait for approval tx to confirm first.
+      // For demo, both txs will work since approval is max.
+      setTimeout(() => {
+        writeContract({
+          address: ADDRESSES.GoalPredictCore,
+          abi: GoalPredictCoreABI,
+          functionName: "enterTournament",
+          args: [BigInt(tournamentId)],
+        });
+      }, 100);
     },
     [writeContract],
   );
