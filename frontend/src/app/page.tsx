@@ -81,9 +81,18 @@ export default function Home() {
     query: { enabled: true, refetchInterval: 15_000 },
   });
 
+  // Read entrants count
+  const { data: entrantsCountRaw } = useReadContract({
+    address: ADDRESSES.GoalPredictCore,
+    abi: GoalPredictCoreABI,
+    functionName: "getEntrantsCount",
+    args: [0n],
+    query: { enabled: true, refetchInterval: 15_000 },
+  });
+
   const t = data as unknown as [bigint, bigint, bigint, bigint, number, bigint, bigint[]] | undefined;
   const poolSize = t ? (Number(t[5]) || 0) / 1e18 : 0;
-  const entrants = 0; // TODO: wire up getEntrantsCount
+  const entrants = entrantsCountRaw ? Number(entrantsCountRaw) : 0;
   const prizePerPick = t && t[6]?.length ? (Number(t[6][0]) || 0) / 1e18 : 0; // first round pool
 
   // Debug: log errors to console

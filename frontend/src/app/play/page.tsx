@@ -1,13 +1,13 @@
 // ============================================================
 // GoalPredict — Play page (World Cup 2026 edition)
 // Bracket visual, live match feed, AI predictions, submit picks,
-// stepper, toasts, animations
+// stepper, toasts, animations — reads real data from contract
 // ============================================================
 
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract, usePublicClient } from "wagmi";
 import { ConnectKitButton } from "connectkit";
 import BracketVisual, { type BracketMatch } from "@/components/BracketVisual";
 import AIPrediction from "@/components/AIPrediction";
@@ -18,23 +18,25 @@ import {
   loadPredictionModel,
   type QVACPrediction,
 } from "@/lib/qvac";
-import { TEAMS, FLAG_MAP, buildKnockoutBracket } from "@/lib/worldcup2026";
+import { TEAMS, FLAG_MAP } from "@/lib/worldcup2026";
+import { GoalPredictCoreABI, ADDRESSES } from "@/lib/contracts";
 import {
   generateFullMatchCommentary,
   type CommentaryEvent,
 } from "@/lib/ai-commentary";
 
-// ---------- World Cup 2026 Knockout Bracket (R16) ----------
-// Built from actual World Cup 2026 data using the knockout bracket generator
-const KNOCKOUT_BRACKET = buildKnockoutBracket();
+// ---------- Contract match type ----------
+interface ContractMatch {
+  id: number;
+  homeTeam: string;
+  awayTeam: string;
+  round: number;
+  homeGoals: number;
+  awayGoals: number;
+  resolved: boolean;
+}
 
-// Use first 8 R16 matches for bracket display
-const WC2026_R16: { home: string; away: string }[] = KNOCKOUT_BRACKET
-  .filter((m) => m.round === "R16")
-  .slice(0, 8)
-  .map((m) => ({ home: m.homeTeam, away: m.awayTeam }));
-
-// ---------- Demo live match data ----------
+// ---------- Live match data for feed (derived from contract matches) ----------
 interface LiveMatchData {
   homeTeam: { name: string; code: string; flag: string; score: number };
   awayTeam: { name: string; code: string; flag: string; score: number };
@@ -50,30 +52,6 @@ function getTeamCode(name: string): string {
 function getTeamFlag(name: string): string {
   return FLAG_MAP[name] ?? "\u{1F3C6}";
 }
-
-const DEMO_LIVE_MATCHES: LiveMatchData[] = [
-  {
-    homeTeam: { name: "Brazil", code: getTeamCode("Brazil"), flag: getTeamFlag("Brazil"), score: 2 },
-    awayTeam: { name: "South Korea", code: getTeamCode("South Korea"), flag: getTeamFlag("South Korea"), score: 1 },
-    status: "live",
-    currentMinute: 67,
-    predictions: { homeWinPct: 62, drawPct: 20, awayWinPct: 18 },
-  },
-  {
-    homeTeam: { name: "Argentina", code: getTeamCode("Argentina"), flag: getTeamFlag("Argentina"), score: 1 },
-    awayTeam: { name: "Croatia", code: getTeamCode("Croatia"), flag: getTeamFlag("Croatia"), score: 1 },
-    status: "live",
-    currentMinute: 34,
-    predictions: { homeWinPct: 55, drawPct: 25, awayWinPct: 20 },
-  },
-  {
-    homeTeam: { name: "Spain", code: getTeamCode("Spain"), flag: getTeamFlag("Spain"), score: 3 },
-    awayTeam: { name: "Morocco", code: getTeamCode("Morocco"), flag: getTeamFlag("Morocco"), score: 0 },
-    status: "finished",
-    currentMinute: 90,
-    predictions: { homeWinPct: 58, drawPct: 22, awayWinPct: 20 },
-  },
-];
 
 // ---------- Toast types ----------
 type ToastType = "pending" | "success" | "error";
@@ -290,27 +268,114 @@ export default function PlayPage() {
   const [hasEntered, setHasEntered] = useState(false);
   const [picksLocked, setPicksLocked] = useState(false);
 
+  // ----- Read matches count from contract -----
+  const { data: matchesCountRaw } = useReadContract({
+    address: ADDRESSES.GoalPredictCore,
+    abi: GoalPredictCoreABI,
+    functionName: "getMatchesCount",
+    args: [0n],
+    query: { enabled: mounted && isConnected, refetchInterval: 15_000 },
+  });
+  const matchesCount = matchesCountRaw ? Number(matchesCountRaw) : 0;
+
+  // ----- Read tournament info for entry fee display -----
+  const { data: tournamentData } = useReadContract({
+    address: ADDRESSES.GoalPredictCore,
+    abi: GoalPredictCoreABI,
+    functionName: "getTournament",
+    args: [0n],
+    query: { enabled: mounted && isConnected },
+  });
+  const t = tournamentData as unknown as [bigint, bigint, bigint, bigint, number, bigint, bigint[]] | undefined;
+  const entryFeeUSDT = t ? (Number(t[3]) || 0) / 1e18 : 10;
+
+  // ----- Fetch all matches via publicClient in a useEffect -----
+  const publicClient = usePublicClient();
+  const [contractMatches, setContractMatches] = useState<ContractMatch[]>([]);
+
+  useEffect(() => {
+    if (!publicClient || !mounted || matchesCount <= 0) return;
+
+    const fetchMatches = async () => {
+      try {
+        const results = await Promise.all(
+          Array.from({ length: Math.min(matchesCount, 30) }, (_, i) =>
+            publicClient.readContract({
+              address: ADDRESSES.GoalPredictCore,
+              abi: GoalPredictCoreABI,
+              functionName: "getMatch",
+              args: [0n, BigInt(i)],
+            })
+          )
+        );
+        setContractMatches(
+          results.map((r, i) => {
+            const arr = r as unknown as [bigint, string, string, number, number, number, boolean];
+            return {
+              id: i,
+              homeTeam: arr[1],
+              awayTeam: arr[2],
+              round: arr[3],
+              homeGoals: arr[4],
+              awayGoals: arr[5],
+              resolved: arr[6],
+            };
+          })
+        );
+      } catch (err) {
+        console.error("Failed to fetch matches:", err);
+      }
+    };
+    fetchMatches();
+  }, [publicClient, mounted, matchesCount]);
+
+  // Derive R16 matches from contract data (round === 0)
+  const r16Matches = useMemo(
+    () => contractMatches.filter((m) => m.round === 0),
+    [contractMatches],
+  );
+
+  // All matches grouped by round
+  const matchesByRound = useMemo(() => {
+    const grouped: Record<number, ContractMatch[]> = {};
+    contractMatches.forEach((m) => {
+      if (!grouped[m.round]) grouped[m.round] = [];
+      grouped[m.round].push(m);
+    });
+    return grouped;
+  }, [contractMatches]);
+
+  // ----- Live match feed: use first 3 R16 matches as "live" -----
+  const liveMatchData: LiveMatchData[] = useMemo(() => {
+    return r16Matches.slice(0, 3).map((m) => ({
+      homeTeam: { name: m.homeTeam, code: getTeamCode(m.homeTeam), flag: getTeamFlag(m.homeTeam), score: m.resolved ? m.homeGoals : 0 },
+      awayTeam: { name: m.awayTeam, code: getTeamCode(m.awayTeam), flag: getTeamFlag(m.awayTeam), score: m.resolved ? m.awayGoals : 0 },
+      status: m.resolved ? "finished" : "live",
+      currentMinute: m.resolved ? 90 : 30,
+      predictions: { homeWinPct: 40, drawPct: 25, awayWinPct: 35 },
+    }));
+  }, [r16Matches]);
+
   // Live match commentary state
-  // Generate all commentary once on mount, store per match
   const allLiveCommentary = useMemo(() => {
-    return DEMO_LIVE_MATCHES.map((match) =>
+    return liveMatchData.map((match) =>
       generateFullMatchCommentary(match.homeTeam.name, match.awayTeam.name),
     );
-  }, []);
+  }, [liveMatchData]);
 
   const [liveMinutes, setLiveMinutes] = useState<Record<number, number>>({});
 
   // Filter commentary by current minute for each live match
   const liveCommentary = useMemo(() => {
     const result: Record<number, CommentaryEvent[]> = {};
-    DEMO_LIVE_MATCHES.forEach((match, idx) => {
+    liveMatchData.forEach((match, idx) => {
       const minute = liveMinutes[idx] ?? match.currentMinute;
-      result[idx] = allLiveCommentary[idx].filter(
+      result[idx] = allLiveCommentary[idx]?.filter(
         (e) => e.minute <= minute,
-      );
+      ) ?? [];
     });
     return result;
-  }, [liveMinutes, allLiveCommentary]);
+  }, [liveMinutes, allLiveCommentary, liveMatchData]);
 
   // Fade-in animation on mount
   const [pageVisible, setPageVisible] = useState(false);
@@ -324,7 +389,6 @@ export default function PlayPage() {
       toastIdRef.current += 1;
       const id = toastIdRef.current;
       setToasts((t) => [...t, { id, type, message }]);
-      // Auto-dismiss after 5 seconds
       setTimeout(() => {
         setToasts((t) => t.filter((x) => x.id !== id));
       }, 5000);
@@ -386,7 +450,7 @@ export default function PlayPage() {
     const interval = setInterval(() => {
       setLiveMinutes((prev) => {
         const next = { ...prev };
-        DEMO_LIVE_MATCHES.forEach((match, idx) => {
+        liveMatchData.forEach((match, idx) => {
           if (match.status !== "live") return;
           const current = prev[idx] ?? match.currentMinute;
           if (current >= 90) return;
@@ -394,9 +458,9 @@ export default function PlayPage() {
         });
         return next;
       });
-    }, 5000); // Advance every 5 seconds
+    }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [liveMatchData]);
 
   // totalPicks derived early for stepper and submit logic
   const totalPicks = Object.keys(picks).length;
@@ -409,55 +473,81 @@ export default function PlayPage() {
     return 0;
   }, [hasEntered, picksLocked, totalPicks]);
 
-  // Build bracket rounds from World Cup 2026 data
+  // Build bracket rounds from contract match data
   const rounds = useMemo(() => {
-    // R16: 8 matches from our WC2026 bracket (first 8)
-    const r16Teams = WC2026_R16.slice(0, 8);
-    const r1: BracketMatch[] = r16Teams.map((m, i) => ({
-      id: i,
-      homeTeam: m.home,
-      awayTeam: m.away,
-      winner: null,
-      resolved: false,
+    // R16: use contract matches with round === 0
+    const r16 = (matchesByRound[0] ?? []).slice(0, 8);
+    const r1: BracketMatch[] = r16.map((m, i) => ({
+      id: m.id,
+      homeTeam: m.homeTeam,
+      awayTeam: m.awayTeam,
+      winner: m.resolved ? (m.homeGoals > m.awayGoals ? m.homeTeam : m.awayTeam) : null,
+      resolved: m.resolved,
       picks: picks[i] ? { pickedWinner: picks[i] } : null,
     }));
 
-    // QF: 4 matches — winners from r16
-    const r2: BracketMatch[] = [0, 1, 2, 3, 4, 5, 6, 7]
-      .filter((_, i) => i % 2 === 0)
-      .map((idx, i) => {
-        const w = picks[idx];
-        return {
-          id: 8 + i,
-          homeTeam: w || `Winner R16-${Math.floor(idx / 2) + 1}`,
-          awayTeam: "TBD",
+    // QF: use contract matches with round === 1, or generate placeholders
+    const qf = (matchesByRound[1] ?? []).slice(0, 4);
+    const r2: BracketMatch[] = qf.length > 0
+      ? qf.map((m, i) => ({
+          id: m.id,
+          homeTeam: m.homeTeam,
+          awayTeam: m.awayTeam,
+          winner: m.resolved ? (m.homeGoals > m.awayGoals ? m.homeTeam : m.awayTeam) : null,
+          resolved: m.resolved,
+          picks: picks[8 + i] ? { pickedWinner: picks[8 + i] } : null,
+        }))
+      : r16.slice(0, 8).filter((_, i) => i % 2 === 0).map((_, i) => {
+          const w = picks[i * 2];
+          return {
+            id: 8 + i,
+            homeTeam: w || `Winner R16-${i + 1}`,
+            awayTeam: "TBD",
+            winner: null,
+            resolved: false,
+            picks: picks[8 + i] ? { pickedWinner: picks[8 + i] } : null,
+          };
+        });
+
+    // SF: use contract matches with round === 2, or generate placeholders
+    const sf = (matchesByRound[2] ?? []).slice(0, 2);
+    const r3: BracketMatch[] = sf.length > 0
+      ? sf.map((m, i) => ({
+          id: m.id,
+          homeTeam: m.homeTeam,
+          awayTeam: m.awayTeam,
+          winner: m.resolved ? (m.homeGoals > m.awayGoals ? m.homeTeam : m.awayTeam) : null,
+          resolved: m.resolved,
+          picks: picks[12 + i] ? { pickedWinner: picks[12 + i] } : null,
+        }))
+      : [0, 1].map((i) => ({
+          id: 12 + i,
+          homeTeam: picks[8 + i] || `Winner QF-${i + 1}`,
+          awayTeam: picks[10 + i] || `Winner QF-${i + 2}`,
           winner: null,
           resolved: false,
-          picks: picks[8 + i] ? { pickedWinner: picks[8 + i] } : null,
-        };
-      });
+          picks: picks[12 + i] ? { pickedWinner: picks[12 + i] } : null,
+        }));
 
-    // SF: 2 matches
-    const r3: BracketMatch[] = [0, 1].map((i) => ({
-      id: 12 + i,
-      homeTeam: picks[8 + i] || `Winner QF-${i + 1}`,
-      awayTeam: picks[10 + i] || `Winner QF-${i + 2}`,
-      winner: null,
-      resolved: false,
-      picks: picks[12 + i] ? { pickedWinner: picks[12 + i] } : null,
-    }));
-
-    // Final: 1 match
-    const r4: BracketMatch[] = [
-      {
-        id: 14,
-        homeTeam: picks[12] || "Winner SF-1",
-        awayTeam: picks[13] || "Winner SF-2",
-        winner: null,
-        resolved: false,
-        picks: picks[14] ? { pickedWinner: picks[14] } : null,
-      },
-    ];
+    // Final: use contract match with round === 3, or generate placeholder
+    const final = (matchesByRound[3] ?? []).slice(0, 1);
+    const r4: BracketMatch[] = final.length > 0
+      ? [final[0]].map((m) => ({
+          id: m.id,
+          homeTeam: m.homeTeam,
+          awayTeam: m.awayTeam,
+          winner: m.resolved ? (m.homeGoals > m.awayGoals ? m.homeTeam : m.awayTeam) : null,
+          resolved: m.resolved,
+          picks: picks[14] ? { pickedWinner: picks[14] } : null,
+        }))
+      : [{
+          id: 14,
+          homeTeam: picks[12] || "Winner SF-1",
+          awayTeam: picks[13] || "Winner SF-2",
+          winner: null,
+          resolved: false,
+          picks: picks[14] ? { pickedWinner: picks[14] } : null,
+        }];
 
     return [
       { label: "R16", matches: r1 },
@@ -465,20 +555,20 @@ export default function PlayPage() {
       { label: "SF", matches: r3 },
       { label: "Final", matches: r4 },
     ];
-  }, [picks]);
+  }, [matchesByRound, picks]);
 
-  // Auto-predict matches that have real team names
+  // Auto-predict matches that have real team names from contract
   useEffect(() => {
-    if (!modelReady) return;
+    if (!modelReady || r16Matches.length === 0) return;
 
-    WC2026_R16.forEach((m, i) => {
+    r16Matches.slice(0, 8).forEach((m, i) => {
       if (!predictions[i]) {
-        predictMatch(m.home, m.away).then((pred) => {
+        predictMatch(m.homeTeam, m.awayTeam).then((pred) => {
           setPredictions((prev) => ({ ...prev, [i]: pred }));
         });
       }
     });
-  }, [modelReady, predictions]);
+  }, [modelReady, predictions, r16Matches]);
 
   // Handle pick
   const handlePick = useCallback((matchId: number, team: string) => {
@@ -487,16 +577,20 @@ export default function PlayPage() {
 
   // Submit picks on-chain for Round 0 (R16)
   const handleSubmit = useCallback(() => {
-    const r16Teams = WC2026_R16.slice(0, 8);
+    const r16 = r16Matches.slice(0, 8);
+    if (r16.length === 0) return;
     // Convert picks to match indices for the contract
     // 0 = home wins, 1 = away wins
-    const pickIndices = r16Teams.map((m, i) => {
+    const pickIndices = r16.map((m, i) => {
       const p = picks[i];
       if (!p) return 0;
-      return p === m.home ? 0 : 1;
+      return p === m.homeTeam ? 0 : 1;
     });
     submit(0, 0, pickIndices); // tournamentId=0, round=0 (R16)
-  }, [picks, submit]);
+  }, [picks, submit, r16Matches]);
+
+  // Total possible picks: R16 matches (from contract) + 7 (QF4 + SF2 + Final1)
+  const totalPossiblePicks = (r16Matches.length || 8) + 7;
 
   // ---------- Not connected ----------
   if (!mounted) {
@@ -541,7 +635,7 @@ export default function PlayPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-slate-500">
-            {totalPicks}/{WC2026_R16.length + 6} picks
+            {totalPicks}/{totalPossiblePicks} picks
           </span>
           <button
             onClick={handleSubmit}
@@ -571,12 +665,12 @@ export default function PlayPage() {
         <button
           onClick={() => {
             setHasEntered(true);
-            enter(0); // contract reads entryFee internally
+            enter(0);
           }}
           disabled={enterPending || hasEntered}
           className="sm:ml-auto rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-amber-500 hover:scale-105 active:scale-95 disabled:opacity-40 min-h-12 disabled:hover:scale-100"
         >
-          {enterPending ? "Depositing..." : hasEntered ? "Entered" : "Enter ($10 USDT)"}
+          {enterPending ? "Depositing..." : hasEntered ? "Entered" : `Enter ($${entryFeeUSDT} USDT)`}
         </button>
       </div>
 
@@ -588,59 +682,70 @@ export default function PlayPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
             </span>
-            Live Match Feed
+            {liveMatchData.length > 0 ? "Live Match Feed" : "Match Feed"}
           </h2>
           <HelpTooltip text="Watch AI-generated live commentary from ongoing World Cup 2026 matches." />
         </div>
         <p className="text-slate-400 mb-4 text-sm">
-          Real-time match updates powered by QVAC AI commentary.
+          {liveMatchData.length > 0
+            ? "Real-time match updates powered by QVAC AI commentary."
+            : "No matches available yet. Matches will appear here once added to the tournament."}
         </p>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {DEMO_LIVE_MATCHES.map((match, idx) => {
-            const isLive = match.status === "live";
-            return (
-              <div
-                key={idx}
-                className={`animate-fade-in-up ${
-                  idx === 0
-                    ? "animation-delay-0"
-                    : idx === 1
-                    ? "animation-delay-100"
-                    : "animation-delay-200"
-                }`}
-              >
-                {/* Live badge */}
-                {isLive && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
-                    </span>
-                    <span className="text-xs font-bold text-rose-400 uppercase tracking-wider">
-                      Live — {formatMatchMinute(liveMinutes[idx] ?? match.currentMinute)}
-                    </span>
-                  </div>
-                )}
-                {match.status === "finished" && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      Full Time
-                    </span>
-                  </div>
-                )}
-                <LiveMatchFeed
-                  homeTeam={match.homeTeam}
-                  awayTeam={match.awayTeam}
-                  status={match.status}
-                  currentMinute={liveMinutes[idx] ?? match.currentMinute}
-                  events={liveCommentary[idx] ?? []}
-                  predictions={match.predictions}
-                />
-              </div>
-            );
-          })}
-        </div>
+        {liveMatchData.length > 0 ? (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {liveMatchData.map((match, idx) => {
+              const isLive = match.status === "live";
+              return (
+                <div
+                  key={idx}
+                  className={`animate-fade-in-up ${
+                    idx === 0
+                      ? "animation-delay-0"
+                      : idx === 1
+                      ? "animation-delay-100"
+                      : "animation-delay-200"
+                  }`}
+                >
+                  {isLive && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
+                      </span>
+                      <span className="text-xs font-bold text-rose-400 uppercase tracking-wider">
+                        Live — {formatMatchMinute(liveMinutes[idx] ?? match.currentMinute)}
+                      </span>
+                    </div>
+                  )}
+                  {match.status === "finished" && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        Full Time
+                      </span>
+                    </div>
+                  )}
+                  <LiveMatchFeed
+                    homeTeam={match.homeTeam}
+                    awayTeam={match.awayTeam}
+                    status={match.status}
+                    currentMinute={liveMinutes[idx] ?? match.currentMinute}
+                    events={liveCommentary[idx] ?? []}
+                    predictions={match.predictions}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-8 text-center">
+            <span className="text-4xl mb-4 block">📋</span>
+            <p className="text-slate-400 text-sm">
+              No matches have been added to the tournament yet.
+              {matchesCount === 0 && " Waiting for admin to add matches."}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Bracket - collapsible on very small screens */}
@@ -649,8 +754,9 @@ export default function PlayPage() {
           Knockout Bracket
         </h2>
         <p className="text-slate-400 mb-4 text-sm">
-          Select your winners for each round. All 48 World Cup 2026 qualified
-          teams across 12 groups compete in the knockout stage.
+          {contractMatches.length > 0
+            ? `Select your winners for each round. ${contractMatches.length} matches in the tournament.`
+            : "Select your winners for each round. Loading matches from contract..."}
         </p>
         <details className="mb-6 sm:mb-0 sm:contents">
           <summary className="sm:hidden cursor-pointer text-sm font-semibold text-emerald-400 mb-3 select-none">
@@ -671,39 +777,48 @@ export default function PlayPage() {
         <p className="text-slate-400 mb-6 text-sm">
           AI-generated win probabilities for each World Cup 2026 knockout matchup.
         </p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {WC2026_R16.map((m, i) => {
-            const pred: QVACPrediction | undefined = predictions[i];
-            return (
-              <div
-                key={i}
-                className="rounded-xl border border-slate-700 bg-slate-900/50 p-3 transition-all duration-300 hover:border-slate-500 hover:bg-slate-800/50 hover:shadow-lg hover:shadow-slate-900/50 animate-fade-in-up"
-                style={{ animationDelay: `${i * 50}ms` }}
-              >
-                <div className="mb-2 text-center text-xs sm:text-sm font-semibold text-slate-200">
-                  {m.home} vs {m.away}
+        {r16Matches.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {r16Matches.slice(0, 8).map((m, i) => {
+              const pred: QVACPrediction | undefined = predictions[i];
+              return (
+                <div
+                  key={m.id}
+                  className="rounded-xl border border-slate-700 bg-slate-900/50 p-3 transition-all duration-300 hover:border-slate-500 hover:bg-slate-800/50 hover:shadow-lg hover:shadow-slate-900/50 animate-fade-in-up"
+                  style={{ animationDelay: `${i * 50}ms` }}
+                >
+                  <div className="mb-2 text-center text-xs sm:text-sm font-semibold text-slate-200">
+                    {m.homeTeam} vs {m.awayTeam}
+                  </div>
+                  <AIPrediction
+                    prediction={
+                      pred
+                        ? {
+                            homeTeam: m.homeTeam,
+                            awayTeam: m.awayTeam,
+                            homeWinPct: pred.homeWinPct,
+                            drawPct: pred.drawPct,
+                            awayWinPct: pred.awayWinPct,
+                            predictedWinner: pred.predictedWinner,
+                            confidence: pred.confidence,
+                            loading: false,
+                          }
+                        : null
+                    }
+                    loading={!modelReady || !pred}
+                  />
                 </div>
-                <AIPrediction
-                  prediction={
-                    pred
-                      ? {
-                          homeTeam: m.home,
-                          awayTeam: m.away,
-                          homeWinPct: pred.homeWinPct,
-                          drawPct: pred.drawPct,
-                          awayWinPct: pred.awayWinPct,
-                          predictedWinner: pred.predictedWinner,
-                          confidence: pred.confidence,
-                          loading: false,
-                        }
-                      : null
-                  }
-                  loading={!modelReady || !pred}
-                />
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-8 text-center">
+            <span className="text-4xl mb-4 block">🤖</span>
+            <p className="text-slate-400 text-sm">
+              Predictions will appear here once matches are loaded from the contract.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Mobile sticky Lock Picks button */}
@@ -713,7 +828,7 @@ export default function PlayPage() {
           disabled={submitPending || totalPicks === 0}
           className="w-full rounded-xl bg-emerald-500 px-6 py-4 text-base font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-400 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed min-h-12"
         >
-          {submitPending ? "Submitting..." : `Lock Picks (${totalPicks}/${WC2026_R16.length + 6})`}
+          {submitPending ? "Submitting..." : `Lock Picks (${totalPicks}/${totalPossiblePicks})`}
         </button>
       </div>
 

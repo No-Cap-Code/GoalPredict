@@ -1,152 +1,28 @@
 // ============================================================
 // GoalPredict — Results page
 // Resolved rounds, user scorecard, claim winnings, leaderboard
+// Reads real data from the GoalPredictCore contract
 // ============================================================
 
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAccount } from "wagmi";
+import { useState, useEffect, useMemo } from "react";
+import { useAccount, useReadContract, usePublicClient } from "wagmi";
 import { ConnectKitButton } from "connectkit";
 import { useClaimPayout } from "@/hooks/useGoalPredict";
+import { GoalPredictCoreABI, ADDRESSES } from "@/lib/contracts";
 
 const ROUND_LABELS = ["R16", "QF", "SF", "Final"] as const;
 
-// Demo resolved matches
-const RESOLVED_MATCHES = [
-  // R16
-  {
-    id: 0,
-    round: 0,
-    homeTeam: "Brazil",
-    awayTeam: "South Korea",
-    winner: "Brazil",
-    correct: true,
-  },
-  {
-    id: 1,
-    round: 0,
-    homeTeam: "Japan",
-    awayTeam: "Croatia",
-    winner: "Croatia",
-    correct: false,
-  },
-  {
-    id: 2,
-    round: 0,
-    homeTeam: "Morocco",
-    awayTeam: "Spain",
-    winner: "Morocco",
-    correct: true,
-  },
-  {
-    id: 3,
-    round: 0,
-    homeTeam: "Argentina",
-    awayTeam: "Australia",
-    winner: "Argentina",
-    correct: true,
-  },
-  {
-    id: 4,
-    round: 0,
-    homeTeam: "France",
-    awayTeam: "Poland",
-    winner: "France",
-    correct: true,
-  },
-  {
-    id: 5,
-    round: 0,
-    homeTeam: "England",
-    awayTeam: "Senegal",
-    winner: "England",
-    correct: true,
-  },
-  {
-    id: 6,
-    round: 0,
-    homeTeam: "Portugal",
-    awayTeam: "Switzerland",
-    winner: "Portugal",
-    correct: false,
-  },
-  {
-    id: 7,
-    round: 0,
-    homeTeam: "Netherlands",
-    awayTeam: "USA",
-    winner: "Netherlands",
-    correct: true,
-  },
-  // QF
-  {
-    id: 8,
-    round: 1,
-    homeTeam: "Brazil",
-    awayTeam: "Croatia",
-    winner: "Croatia",
-    correct: false,
-  },
-  {
-    id: 9,
-    round: 1,
-    homeTeam: "Morocco",
-    awayTeam: "Argentina",
-    winner: "Argentina",
-    correct: true,
-  },
-  {
-    id: 10,
-    round: 1,
-    homeTeam: "France",
-    awayTeam: "England",
-    winner: "France",
-    correct: true,
-  },
-  {
-    id: 11,
-    round: 1,
-    homeTeam: "Portugal",
-    awayTeam: "Netherlands",
-    winner: "Portugal",
-    correct: false,
-  },
-  // SF
-  {
-    id: 12,
-    round: 2,
-    homeTeam: "Argentina",
-    awayTeam: "France",
-    winner: "Argentina",
-    correct: true,
-  },
-  {
-    id: 13,
-    round: 2,
-    homeTeam: "Portugal",
-    awayTeam: "Croatia",
-    winner: "Croatia",
-    correct: false,
-  },
-  // Final
-  {
-    id: 14,
-    round: 3,
-    homeTeam: "Argentina",
-    awayTeam: "Croatia",
-    winner: "Argentina",
-    correct: true,
-  },
-];
-
-const LEADERBOARD = [
-  { address: "0x742d...8B2A", correct: 12, earned: 850, rank: 1 },
-  { address: "0x9c4e...3F1D", correct: 11, earned: 620, rank: 2 },
-  { address: "0x1aB3...E7F2", correct: 10, earned: 410, rank: 3 },
-  { address: "0x5e8F...4A9C", correct: 9, earned: 280, rank: 4 },
-  { address: "0xB2D4...6E3A", correct: 8, earned: 190, rank: 5 },
-];
+interface ContractMatch {
+  id: number;
+  homeTeam: string;
+  awayTeam: string;
+  round: number;
+  homeGoals: number;
+  awayGoals: number;
+  resolved: boolean;
+}
 
 export default function ResultsPage() {
   const [mounted, setMounted] = useState(false);
@@ -154,19 +30,76 @@ export default function ResultsPage() {
 
   const { isConnected, address } = useAccount();
   const { claim, isPending, error } = useClaimPayout();
+  const publicClient = usePublicClient();
 
   const canClaim = isConnected && address;
 
-  // Group matches by round
-  const rounds = ROUND_LABELS.map((label, idx) => ({
-    label,
-    matches: RESOLVED_MATCHES.filter((m) => m.round === idx),
-  }));
+  // ----- Read matches count from contract -----
+  const { data: matchesCountRaw } = useReadContract({
+    address: ADDRESSES.GoalPredictCore,
+    abi: GoalPredictCoreABI,
+    functionName: "getMatchesCount",
+    args: [0n],
+    query: { enabled: mounted && isConnected, refetchInterval: 15_000 },
+  });
+  const matchesCount = matchesCountRaw ? Number(matchesCountRaw) : 0;
 
-  const userCorrect = RESOLVED_MATCHES.filter((m) => m.correct).length;
-  const userByRound = ROUND_LABELS.map((_, idx) =>
-    RESOLVED_MATCHES.filter((m) => m.round === idx && m.correct).length
+  // ----- Fetch all matches via publicClient -----
+  const [contractMatches, setContractMatches] = useState<ContractMatch[]>([]);
+
+  useEffect(() => {
+    if (!publicClient || !mounted || matchesCount <= 0) return;
+    const fetchMatches = async () => {
+      try {
+        const results = await Promise.all(
+          Array.from({ length: Math.min(matchesCount, 30) }, (_, i) =>
+            publicClient.readContract({
+              address: ADDRESSES.GoalPredictCore,
+              abi: GoalPredictCoreABI,
+              functionName: "getMatch",
+              args: [0n, BigInt(i)],
+            })
+          )
+        );
+        setContractMatches(
+          results.map((r, i) => {
+            const arr = r as unknown as [bigint, string, string, number, number, number, boolean];
+            return {
+              id: i,
+              homeTeam: arr[1],
+              awayTeam: arr[2],
+              round: arr[3],
+              homeGoals: arr[4],
+              awayGoals: arr[5],
+              resolved: arr[6],
+            };
+          })
+        );
+      } catch (err) {
+        console.error("Failed to fetch matches:", err);
+      }
+    };
+    fetchMatches();
+  }, [publicClient, mounted, matchesCount]);
+
+  // Only resolved matches
+  const resolvedMatches = useMemo(
+    () => contractMatches.filter((m) => m.resolved),
+    [contractMatches],
   );
+
+  // Group resolved matches by round
+  const rounds = useMemo(
+    () =>
+      ROUND_LABELS.map((label, idx) => ({
+        label,
+        matches: resolvedMatches.filter((m) => m.round === idx),
+      })),
+    [resolvedMatches],
+  );
+
+  const totalResolvedCount = resolvedMatches.length;
+  const totalMatchCount = contractMatches.length;
 
   if (!mounted) {
     return <div className="flex items-center justify-center min-h-screen"><p className="text-slate-400">Loading...</p></div>;
@@ -202,88 +135,102 @@ export default function ResultsPage() {
           Resolved Rounds
         </h2>
 
-        <div className="space-y-4">
-          {rounds.map((round) => (
-            <div
-              key={round.label}
-              className="rounded-xl border border-slate-700 bg-slate-900/50 overflow-hidden"
-            >
-              <div className="bg-emerald-900/40 border-b border-slate-700 px-4 py-3">
-                <span className="text-xs font-bold uppercase tracking-widest text-emerald-400">
-                  {round.label}
-                </span>
-              </div>
+        {totalResolvedCount === 0 ? (
+          <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-8 text-center">
+            <span className="text-4xl mb-4 block">📋</span>
+            <p className="text-slate-300 font-semibold mb-2">No matches resolved yet</p>
+            <p className="text-slate-400 text-sm">
+              {totalMatchCount > 0
+                ? `${totalMatchCount} matches are in the tournament. Results will appear here once matches are resolved.`
+                : "No matches have been added to the tournament yet."}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {rounds.map((round) => (
+              <div
+                key={round.label}
+                className="rounded-xl border border-slate-700 bg-slate-900/50 overflow-hidden"
+              >
+                <div className="bg-emerald-900/40 border-b border-slate-700 px-4 py-3">
+                  <span className="text-xs font-bold uppercase tracking-widest text-emerald-400">
+                    {round.label}
+                  </span>
+                </div>
 
-              <div className="divide-y divide-slate-800">
-                {round.matches.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 gap-2"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl">{m.correct ? "✅" : "❌"}</span>
-                      <div className="text-xs sm:text-sm">
-                        <span className="font-medium text-slate-200">
-                          {m.homeTeam}
-                        </span>
-                        <span className="mx-2 text-slate-500">vs</span>
-                        <span className="font-medium text-slate-200">
-                          {m.awayTeam}
-                        </span>
+                <div className="divide-y divide-slate-800">
+                  {round.matches.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 gap-2"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="text-xs sm:text-sm">
+                          <span className="font-medium text-slate-200">
+                            {m.homeTeam}
+                          </span>
+                          <span className="mx-2 text-slate-500">
+                            {m.homeGoals} - {m.awayGoals}
+                          </span>
+                          <span className="font-medium text-slate-200">
+                            {m.awayTeam}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right sm:text-right pl-8 sm:pl-0">
+                        <div className="text-xs sm:text-sm font-bold text-emerald-400">
+                          Winner: {m.homeGoals > m.awayGoals ? m.homeTeam : m.awayTeam}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right sm:text-right pl-8 sm:pl-0">
-                      <div className="text-xs sm:text-sm font-bold text-emerald-400">
-                        Winner: {m.winner}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {m.correct ? "Correct pick" : "Incorrect"}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* User Scorecard */}
       <section className="mb-10">
         <h2 className="text-xl sm:text-2xl font-bold text-white mb-6 flex items-center gap-2">
           <span className="text-amber-400">📊</span>
-          Your Scorecard
+          Tournament Summary
         </h2>
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-          {/* Total */}
-          <div className="rounded-xl border-2 border-emerald-700/50 bg-emerald-900/30 p-4 sm:p-6 text-center col-span-2 sm:col-span-2">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="rounded-xl border-2 border-emerald-700/50 bg-emerald-900/30 p-4 sm:p-6 text-center">
             <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-emerald-400">
-              Total Correct
+              Total Matches
             </div>
-            <div className="mt-2 text-3xl sm:text-5xl font-extrabold text-emerald-300">
-              {userCorrect}/15
-            </div>
-            <div className="mt-2 text-xs sm:text-sm text-slate-400">
-              {Math.round((userCorrect / 15) * 100)}% accuracy
+            <div className="mt-2 text-3xl sm:text-4xl font-extrabold text-emerald-300">
+              {totalMatchCount}
             </div>
           </div>
-
-          {/* Per round */}
-          {userByRound.map((correct, idx) => (
-            <div
-              key={idx}
-              className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 sm:p-4 text-center"
-            >
-              <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-400">
-                {ROUND_LABELS[idx]}
-              </div>
-              <div className="mt-1 text-xl sm:text-2xl font-bold text-white">{correct}</div>
-              <div className="text-[10px] sm:text-xs text-slate-500">
-                /{rounds[idx].matches.length}
-              </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 sm:p-6 text-center">
+            <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-400">
+              Resolved
             </div>
-          ))}
+            <div className="mt-2 text-3xl sm:text-4xl font-bold text-white">
+              {totalResolvedCount}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 sm:p-6 text-center">
+            <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-400">
+              Pending
+            </div>
+            <div className="mt-2 text-3xl sm:text-4xl font-bold text-white">
+              {totalMatchCount - totalResolvedCount}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 sm:p-6 text-center">
+            <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-400">
+              Rounds Resolved
+            </div>
+            <div className="mt-2 text-3xl sm:text-4xl font-bold text-white">
+              {rounds.filter((r) => r.matches.length > 0).length}/4
+            </div>
+          </div>
         </div>
       </section>
 
@@ -298,14 +245,13 @@ export default function ResultsPage() {
           {canClaim ? (
             <>
               <p className="text-slate-300 mb-4 text-sm sm:text-base">
-                You have <span className="font-bold text-amber-300">
-                  {userCorrect} correct picks
-                </span>{" "}
-                across all resolved rounds. Claim your share of the prize pool.
+                {totalResolvedCount > 0
+                  ? <>Claim your share of the prize pool for resolved rounds.</>
+                  : <>No rounds have been resolved yet. Winnings will be available after round resolution.</>}
               </p>
               <button
                 onClick={() => claim(0)}
-                disabled={isPending}
+                disabled={isPending || totalResolvedCount === 0}
                 className="w-full rounded-xl bg-amber-500 px-6 py-4 text-lg font-bold text-slate-900 shadow-lg transition hover:bg-amber-400 disabled:opacity-40"
               >
                 {isPending ? "Claiming..." : "Claim Winnings"}
@@ -319,109 +265,6 @@ export default function ResultsPage() {
               Connect your wallet to claim winnings.
             </p>
           )}
-        </div>
-      </section>
-
-      {/* Leaderboard */}
-      <section>
-        <h2 className="text-xl sm:text-2xl font-bold text-white mb-6 flex items-center gap-2">
-          <span className="text-emerald-400">🏅</span>
-          Leaderboard
-        </h2>
-
-        {/* Desktop table */}
-        <div className="hidden sm:block rounded-xl border border-slate-700 bg-slate-900/50 overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-800/50 border-b border-slate-700">
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-widest text-slate-400">
-                  Rank
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-widest text-slate-400">
-                  Address
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-widest text-slate-400">
-                  Correct
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-widest text-slate-400">
-                  Earned (USDT)
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {LEADERBOARD.map((entry) => (
-                <tr key={entry.address} className="hover:bg-slate-800/50">
-                  <td className="px-4 py-3">
-                    <span
-                      className={`
-                        inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold
-                        ${
-                          entry.rank === 1
-                            ? "bg-amber-500 text-slate-900"
-                            : entry.rank === 2
-                            ? "bg-slate-400 text-slate-900"
-                            : entry.rank === 3
-                            ? "bg-amber-700 text-slate-900"
-                            : "bg-slate-700 text-slate-200"
-                        }
-                      `}
-                    >
-                      {entry.rank}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-sm text-slate-300">
-                    {entry.address}
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold text-emerald-400">
-                    {entry.correct}/15
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold text-amber-300">
-                    {entry.earned.toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile card layout */}
-        <div className="sm:hidden space-y-3">
-          {LEADERBOARD.map((entry) => (
-            <div
-              key={entry.address}
-              className="rounded-xl border border-slate-700 bg-slate-900/50 p-4 flex items-center gap-4"
-            >
-              <span
-                className={`
-                  inline-flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold flex-shrink-0
-                  ${
-                    entry.rank === 1
-                      ? "bg-amber-500 text-slate-900"
-                      : entry.rank === 2
-                      ? "bg-slate-400 text-slate-900"
-                      : entry.rank === 3
-                      ? "bg-amber-700 text-slate-900"
-                      : "bg-slate-700 text-slate-200"
-                  }
-                `}
-              >
-                {entry.rank}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="font-mono text-sm text-slate-300 truncate">
-                  {entry.address}
-                </div>
-                <div className="flex items-center gap-4 mt-1">
-                  <span className="text-xs font-bold text-emerald-400">
-                    {entry.correct}/15 correct
-                  </span>
-                  <span className="text-xs font-bold text-amber-300">
-                    {entry.earned.toLocaleString()} USDT
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       </section>
     </div>

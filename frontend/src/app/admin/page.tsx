@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { useState, useEffect } from "react";
 import { useWriteContract } from "wagmi";
 import { GoalPredictCoreABI, ADDRESSES } from "@/lib/contracts";
@@ -17,7 +17,15 @@ export default function AdminPage() {
 
   const { address } = useAccount();
 
-  const isOwner = true; // TODO: verify against contract owner
+  // Read the contract owner
+  const { data: contractOwner } = useReadContract({
+    address: ADDRESSES.GoalPredictCore,
+    abi: GoalPredictCoreABI,
+    functionName: "owner",
+    query: { enabled: mounted && !!address },
+  });
+
+  const isOwner = !!address && !!contractOwner && address.toLowerCase() === (contractOwner as string).toLowerCase();
   const { writeContract, data: hash, error, isPending } = useWriteContract();
 
   const [activeTab, setActiveTab] = useState("create");
@@ -109,7 +117,7 @@ export default function AdminPage() {
           Manage tournaments, matches, and round resolutions.
         </p>
         <p className="text-xs text-emerald-400 mt-2">
-          Contract owner: {address?.slice(0, 6)}...{address?.slice(-4)}
+          Contract owner: {contractOwner ? `${(contractOwner as string).slice(0, 6)}...${(contractOwner as string).slice(-4)}` : "Loading..."}
         </p>
       </div>
 

@@ -203,3 +203,33 @@ export function useMatch(tournamentId: number | undefined, matchIndex: number | 
 
   return { match, isLoading };
 }
+
+// ==========================================================
+// useMatchesCount — read total match count for a tournament
+// ==========================================================
+export function useMatchesCount(tournamentId: number | undefined) {
+  const { data, isLoading } = useReadContract({
+    address: ADDRESSES.GoalPredictCore,
+    abi: GoalPredictCoreABI,
+    functionName: "getMatchesCount",
+    args: tournamentId !== undefined ? [BigInt(tournamentId)] : undefined,
+    query: { enabled: tournamentId !== undefined },
+  });
+
+  return { count: data !== undefined ? Number(data) : 0, isLoading };
+}
+
+// ==========================================================
+// useOwner — read contract owner address
+// ==========================================================
+export function useOwner() {
+  const { data, isLoading } = useReadContract({
+    address: ADDRESSES.GoalPredictCore,
+    abi: GoalPredictCoreABI,
+    functionName: "owner",
+    args: [],
+    query: { enabled: true },
+  });
+
+  return { owner: data as string | undefined, isLoading };
+}
