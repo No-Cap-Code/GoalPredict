@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   useAccount,
   useReadContract,
@@ -104,34 +104,48 @@ export function useBracket(tournamentId: number | undefined) {
 // ==========================================================
 // useEnterTournament
 // ==========================================================
+// USDT approve ABI
+const USDT_ABI = [
+  { name: "approve", type: "function" as const, inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable" as const },
+];
+
 export function useEnterTournament() {
-  const { writeContract, data: hash, error, isPending } = useWriteContract();
+  const { writeContractAsync } = useWriteContract();
+  const [hash, setHash] = useState<`0x${string}` | undefined>();
+  const [error, setError] = useState<Error | null>(null);
+  const [isPending, setIsPending] = useState(false);
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
 
   const enter = useCallback(
     async (tournamentId: number) => {
-      // Step 1: Approve USDT spending (max uint256)
-      writeContract({
-        address: ADDRESSES.MockUSDT,
-        abi: [
-          { name: "approve", type: "function", inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable" },
-        ],
-        functionName: "approve",
-        args: [ADDRESSES.GoalPredictCore, 2n ** 256n - 1n],
-      });
-      // Step 2: Enter tournament (after approval tx confirms)
-      // Note: In production, wait for approval tx to confirm first.
-      // For demo, both txs will work since approval is max.
-      setTimeout(() => {
-        writeContract({
+      try {
+        setIsPending(true);
+        setError(null);
+
+        // Step 1: Approve USDT spending for GoalPredictCore
+        const approveHash = await writeContractAsync({
+          address: ADDRESSES.MockUSDT,
+          abi: USDT_ABI,
+          functionName: "approve",
+          args: [ADDRESSES.GoalPredictCore, 2n ** 256n - 1n],
+        });
+        setHash(approveHash);
+
+        // Step 2: Enter tournament
+        const enterHash = await writeContractAsync({
           address: ADDRESSES.GoalPredictCore,
           abi: GoalPredictCoreABI,
           functionName: "enterTournament",
           args: [BigInt(tournamentId)],
         });
-      }, 100);
+        setHash(enterHash);
+      } catch (e) {
+        setError(e instanceof Error ? e : new Error(String(e)));
+      } finally {
+        setIsPending(false);
+      }
     },
-    [writeContract],
+    [writeContractAsync],
   );
 
   return { enter, hash, error, isPending, isConfirming };

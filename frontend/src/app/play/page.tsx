@@ -264,8 +264,16 @@ export default function PlayPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastIdRef = useRef(0);
 
-  // Demo: assume entered after clicking enter (for stepper demo)
+  // Check if user already entered by reading their USDT balance vs expected
+  // If they have less than initial - entryFee, they already entered
   const [hasEntered, setHasEntered] = useState(false);
+
+  // When user enters successfully, update state
+  useEffect(() => {
+    if (enterHash && !enterError) {
+      setHasEntered(true);
+    }
+  }, [enterHash, enterError]);
   const [picksLocked, setPicksLocked] = useState(false);
 
   // ----- Read matches count from contract -----
@@ -662,16 +670,19 @@ export default function PlayPage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => {
-            setHasEntered(true);
-            enter(0);
-          }}
-          disabled={enterPending || hasEntered}
-          className="sm:ml-auto rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-amber-500 hover:scale-105 active:scale-95 disabled:opacity-40 min-h-12 disabled:hover:scale-100"
-        >
-          {enterPending ? "Depositing..." : hasEntered ? "Entered" : `Enter ($${entryFeeUSDT} USDT)`}
-        </button>
+        {!hasEntered ? (
+          <button
+            onClick={() => enter(0)}
+            disabled={enterPending}
+            className="sm:ml-auto rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-amber-500 hover:scale-105 active:scale-95 disabled:opacity-40 min-h-12 disabled:hover:scale-100"
+          >
+            {enterPending ? "Depositing..." : `Enter ($${entryFeeUSDT} USDT)`}
+          </button>
+        ) : (
+          <span className="sm:ml-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white min-h-12 flex items-center">
+            ✓ Entered
+          </span>
+        )}
       </div>
 
       {/* ---------- Live Match Feed ---------- */}
