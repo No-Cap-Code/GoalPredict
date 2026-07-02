@@ -35,7 +35,11 @@
       "Bash(fuser -k 3001/tcp)",
       "Bash(fuser -k 3002/tcp)",
       "Bash(fuser -k 3003/tcp)",
-      "Bash(tee /tmp/errors.txt)"
+      "Bash(tee /tmp/errors.txt)",
+      "Bash(PRIVATE_KEY=0xf811270a1c009c63ca5e50b643c53a0cafc04ca124eb8da88f904e58950b2e46 forge script *)",
+      "Bash(cast call *)",
+      "Bash(bash /tmp/add_matches.sh)",
+      "Bash(cast send *)"
     ]
   }
 }
