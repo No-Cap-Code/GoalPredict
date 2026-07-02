@@ -22,3 +22,4 @@ Thumbs.db
 # Backups
 frontend_public_backup/
 frontend_src_backup/
+.vercel

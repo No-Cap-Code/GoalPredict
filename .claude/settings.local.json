@@ -29,7 +29,13 @@
       "Bash(fuser -k 3000/tcp 3001/tcp 3002/tcp 3003/tcp)",
       "Bash(tee /tmp/build-output.txt)",
       "Bash(vercel *)",
-      "Bash(tee /tmp/build_output.txt)"
+      "Bash(tee /tmp/build_output.txt)",
+      "Bash(PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium)",
+      "Bash(fuser -k 3000/tcp)",
+      "Bash(fuser -k 3001/tcp)",
+      "Bash(fuser -k 3002/tcp)",
+      "Bash(fuser -k 3003/tcp)",
+      "Bash(tee /tmp/errors.txt)"
     ]
   }
 }
