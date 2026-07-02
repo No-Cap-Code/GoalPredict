@@ -18,28 +18,21 @@ import {
   loadPredictionModel,
   type QVACPrediction,
 } from "@/lib/qvac";
-import { TEAMS, FLAG_MAP } from "@/lib/worldcup2026";
+import { TEAMS, FLAG_MAP, buildKnockoutBracket } from "@/lib/worldcup2026";
 import {
   generateFullMatchCommentary,
   type CommentaryEvent,
 } from "@/lib/ai-commentary";
 
 // ---------- World Cup 2026 Knockout Bracket (R16) ----------
-// 16 matches seeded from the 12 groups — exciting cross-group matchups
-const WC2026_R16: { home: string; away: string }[] = [
-  { home: "Brazil",       away: "South Korea" },
-  { home: "Argentina",    away: "Croatia" },
-  { home: "France",       away: "Senegal" },
-  { home: "England",      away: "Colombia" },
-  { home: "Spain",        away: "Morocco" },
-  { home: "Germany",      away: "Japan" },
-  { home: "Portugal",     away: "Uruguay" },
-  { home: "Netherlands",  away: "USA" },
-  { home: "Belgium",      away: "Ecuador" },
-  { home: "Mexico",       away: "Switzerland" },
-  { home: "Iran",         away: "Australia" },
-  { home: "Croatia",      away: "Canada" },
-];
+// Built from actual World Cup 2026 data using the knockout bracket generator
+const KNOCKOUT_BRACKET = buildKnockoutBracket();
+
+// Use first 8 R16 matches for bracket display
+const WC2026_R16: { home: string; away: string }[] = KNOCKOUT_BRACKET
+  .filter((m) => m.round === "R16")
+  .slice(0, 8)
+  .map((m) => ({ home: m.homeTeam, away: m.awayTeam }));
 
 // ---------- Demo live match data ----------
 interface LiveMatchData {

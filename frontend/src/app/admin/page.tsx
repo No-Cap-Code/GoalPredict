@@ -9,6 +9,7 @@ import { useAccount } from "wagmi";
 import { useState } from "react";
 import { useWriteContract } from "wagmi";
 import { GoalPredictCoreABI, ADDRESSES } from "@/lib/contracts";
+import { TEAMS } from "@/lib/worldcup2026";
 
 export default function AdminPage() {
   const { address } = useAccount();
@@ -304,13 +305,11 @@ export default function AdminPage() {
                 className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
               >
                 <option value="">Select winner</option>
-                {["Brazil", "South Korea", "Japan", "Croatia", "Morocco", "Spain", "Argentina", "Australia", "France", "Poland", "England", "Senegal", "Portugal", "Switzerland", "Netherlands", "USA", "Croatia"].map(
-                  (team) => (
-                    <option key={team} value={team}>
-                      {team}
-                    </option>
-                  )
-                )}
+                {TEAMS.map((team) => (
+                  <option key={team.name} value={team.name}>
+                    {team.flag} {team.name}
+                  </option>
+                ))}
               </select>
             </div>
 
